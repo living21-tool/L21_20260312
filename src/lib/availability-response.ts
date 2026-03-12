@@ -25,24 +25,42 @@ export function createTelegramAvailabilityMessage(
   result: AvailabilityResult,
   request: { checkIn: string; checkOut: string; bedsNeeded: number },
 ) {
-  const header = `${result.location.name}, ${formatDate(request.checkIn)} bis ${formatDate(request.checkOut)}, ${request.bedsNeeded} Betten`
-
-  if (!result.allocation.success) {
-    return [
-      `Nicht voll verfuegbar.`,
-      header,
-      `Frei sind nur ${result.allocation.totalBedsAllocated} von ${result.allocation.totalBedsRequested} Betten.`,
-    ].join('\n')
-  }
-
   const allocationLines = result.allocation.allocations.map(entry => {
     const label = entry.shortCode || entry.propertyName
     return `- ${label}: ${entry.bedsAllocated} Bett${entry.bedsAllocated === 1 ? '' : 'en'}`
   })
 
+  if (!result.allocation.success) {
+    return [
+      `Nicht voll verfuegbar.`,
+      ``,
+      `<b><u>Wo?</u></b>`,
+      `${result.location.name}`,
+      ``,
+      `<b><u>Wann?</u></b>`,
+      `${formatDate(request.checkIn)} - ${formatDate(request.checkOut)}`,
+      ``,
+      `<b><u>Was?</u></b>`,
+      `${request.bedsNeeded} Betten`,
+      ``,
+      `<b><u>Status</u></b>`,
+      `Frei sind nur ${result.allocation.totalBedsAllocated} von ${result.allocation.totalBedsRequested} Betten.`,
+    ].join('\n')
+  }
+
   return [
-    `Ja, verfuegbar.`,
-    header,
+    `Ja, verfuegbar!`,
+    ``,
+    `<b><u>Wo?</u></b>`,
+    `${result.location.name}`,
+    ``,
+    `<b><u>Wann?</u></b>`,
+    `${formatDate(request.checkIn)} - ${formatDate(request.checkOut)}`,
+    ``,
+    `<b><u>Was?</u></b>`,
+    `${request.bedsNeeded} Betten`,
+    ``,
+    `<b><u>Einheiten:</u></b>`,
     ...allocationLines,
   ].join('\n')
 }
