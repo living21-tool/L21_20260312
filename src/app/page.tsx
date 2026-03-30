@@ -119,7 +119,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard title="Umsatz (Monat)" value={formatCurrency(revenueThisMonth)} sub={`Vormonat: ${formatCurrency(revenueLastMonth)}`} trend={revenueTrend} icon={Euro} color="bg-blue-500" />
         <StatCard title="Bettauslastung" value={`${bedOccupancy}%`} sub={`${bedsOccupiedToday} / ${totalBeds} Betten belegt`} icon={BedDouble} color="bg-emerald-500" />
-        <StatCard title="Ø Bettpreis/Nacht" value={avgBedPrice > 0 ? formatCurrency(avgBedPrice) : '—'} sub={`${allProperties.length} Objekte · ${totalBeds} Betten`} icon={TrendingUp} color="bg-violet-500" />
+        <StatCard title="Ø Bettpreis/Nacht" value={avgBedPrice > 0 ? formatCurrency(avgBedPrice) : '—'} sub={`${allProperties.length} Portfolio · ${totalBeds} Betten`} icon={TrendingUp} color="bg-violet-500" />
         <StatCard title="Offene Rechnungen" value={formatCurrency(openAmount)} sub={`${openInvoices.length} Rechnungen offen`} icon={AlertCircle} color="bg-amber-500" />
       </div>
 
@@ -209,7 +209,7 @@ export default function DashboardPage() {
                     <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: loc.color }} />
                     <p className="text-sm font-medium text-slate-900 truncate">{loc.name}</p>
                   </div>
-                  <p className="text-xs text-slate-500 ml-4">{props.length} Objekte · {beds} Betten · {loc.city}</p>
+                  <p className="text-xs text-slate-500 ml-4">{props.length} Portfolio · {beds} Betten · {loc.city}</p>
                 </div>
               )
             })}

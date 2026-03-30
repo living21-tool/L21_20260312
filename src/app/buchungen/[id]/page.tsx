@@ -1,6 +1,6 @@
 'use client'
 import { useBookings, useProperties, useLocations, useCustomers } from '@/lib/store'
-import { formatCurrency, formatDate, statusConfig, paymentConfig } from '@/lib/utils'
+import { formatCurrency, formatDate, formatLocationLabel, statusConfig, paymentConfig } from '@/lib/utils'
 import { ArrowLeft, FileText, Building2, Calendar, CreditCard, ExternalLink, BedDouble, Briefcase } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
@@ -28,6 +28,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const loc = allLocations.find(l => l.id === prop?.locationId)
   const sc = statusConfig[booking.status]
   const pc = paymentConfig[booking.paymentStatus]
+  const lexofficeQuery = booking.invoiceNumber || booking.lexofficeInvoiceId || booking.lexofficeQuotationId || ''
+  const lexofficeUrl = `https://app.lexoffice.de/vouchers#!/VoucherList/?filter=lastedited&sort=sortByLastModifiedDate&query=${encodeURIComponent(lexofficeQuery)}`
 
   const bedUtilization = prop ? Math.round((booking.bedsBooked / prop.beds) * 100) : 0
 
@@ -57,7 +59,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <p className="font-medium text-slate-900">{prop?.name}</p>
             {prop?.shortCode && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">{prop.shortCode}</span>}
           </div>
-          <p className="text-sm text-slate-500 mb-3">{loc?.name} · {loc?.city}</p>
+          <p className="text-sm text-slate-500 mb-3">{formatLocationLabel(loc?.name, loc?.city)}</p>
           <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
             <BedDouble size={16} className="text-slate-500" />
             <span className="text-sm font-semibold text-slate-900">{booking.bedsBooked} von {prop?.beds} Betten</span>
@@ -143,9 +145,14 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-sm font-medium text-violet-900">Lexoffice Dokument verknüpft</p>
             <p className="text-xs text-violet-600">{booking.invoiceNumber} · ID: {booking.lexofficeInvoiceId ?? booking.lexofficeQuotationId}</p>
           </div>
-          <button className="flex items-center gap-1 text-xs text-violet-700 hover:text-violet-900 font-medium">
+          <a
+            href={lexofficeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-xs text-violet-700 hover:text-violet-900 font-medium"
+          >
             <ExternalLink size={13}/> In Lexoffice öffnen
-          </button>
+          </a>
         </div>
       )}
 

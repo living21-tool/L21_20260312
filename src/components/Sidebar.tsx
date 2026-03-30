@@ -3,16 +3,18 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, CalendarDays, BookOpen, Building2,
-  Users, BarChart3, Settings, Import, ChevronRight, Zap
+  Users, BarChart3, Settings, Import, ChevronRight, Zap, MessageSquareMore
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { href: '/',             label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/kalender',     label: 'Kalender',     icon: CalendarDays },
+  { href: '/mein-l21',     label: 'Mein L21',     icon: MessageSquareMore },
+  { href: '/mitarbeiter',  label: 'Mitarbeiter',  icon: Users },
+  { href: '/kalender',     label: 'Belegungskalender', icon: CalendarDays },
   { href: '/buchungen',    label: 'Buchungen',    icon: BookOpen },
-  { href: '/buchungen/smart', label: 'Smart Booking', icon: Zap },
-  { href: '/objekte',      label: 'Objekte',      icon: Building2 },
+  { href: '/buchungen/smart', label: 'Leerstand', icon: Zap },
+  { href: '/objekte',      label: 'Portfolio',    icon: Building2 },
   { href: '/kunden',       label: 'Kunden',       icon: Users },
   { href: '/analytics',    label: 'Analytics',    icon: BarChart3 },
   { href: '/import',       label: 'Lexoffice',    icon: Import },

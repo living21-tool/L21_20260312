@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Property, Location, ObjectType } from '@/lib/types'
 import { X, Plus, Trash2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatLocationLabel } from '@/lib/utils'
 
 const objectTypes: { value: ObjectType; label: string }[] = [
   { value: 'wohnung', label: 'Wohnung' },
@@ -210,7 +210,7 @@ export default function PropertyModal({ open, onClose, onSave, locations, initia
             >
               <option value="">Standort wählen...</option>
               {locations.map(l => (
-                <option key={l.id} value={l.id}>{l.name} ({l.city})</option>
+                <option key={l.id} value={l.id}>{formatLocationLabel(l.name, l.city, ' / ')}</option>
               ))}
             </select>
             {errors.locationId && <p className="text-xs text-red-500 mt-1">{errors.locationId}</p>}

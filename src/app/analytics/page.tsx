@@ -50,7 +50,7 @@ export default function AnalyticsPage() {
   // ── Basis: Stornos ausschließen ─────────────────────────────────────────────
   const validBookings = allBookings.filter(b => b.status !== 'storniert')
 
-  // ── Analytics-Filter: Nur Standorte mit Buchungsdaten (z.B. NRW Mülheim raus) ─
+  // ── Analytics-Filter: Nur Standorte mit Buchungsdaten (z.B. Mülheim raus) ─
   const analyticsLocations = allLocations.filter(l => {
     const props = allProperties.filter(p => p.locationId === l.id)
     return props.some(p => p.active) && validBookings.some(b => props.some(p2 => p2.id === b.propertyId))
@@ -518,7 +518,7 @@ export default function AnalyticsPage() {
               { label: 'Umsatz', value: formatCurrency(totalRevenue), sub: `${contextBookings.length} Buchungen`, icon: Euro, color: 'bg-blue-500' },
               { label: 'Ø Bettpreis/Nacht', value: avgBedPrice > 0 ? formatCurrency(avgBedPrice) : '—', sub: 'Zentrale KPI', icon: TrendingUp, color: 'bg-emerald-500' },
               { label: 'Bettnächte', value: totalBedNights.toLocaleString('de'), sub: 'Betten × Nächte', icon: BedDouble, color: 'bg-violet-500' },
-              { label: 'Objekte / Betten', value: `${analyticsProperties.length} / ${totalBeds}`, sub: `${analyticsLocations.length} Standorte`, icon: Building2, color: 'bg-amber-500' },
+              { label: 'Portfolio / Betten', value: `${analyticsProperties.length} / ${totalBeds}`, sub: `${analyticsLocations.length} Standorte`, icon: Building2, color: 'bg-amber-500' },
               { label: 'Ø Aufenthalt', value: `${avgNights}N`, sub: `${allCustomers.length} Auftraggeber`, icon: Users, color: 'bg-slate-500' },
             ].map((kpi, i) => (
               <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 flex items-start gap-3">
@@ -605,7 +605,7 @@ export default function AnalyticsPage() {
                           <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
                           <div>
                             <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{l.name}</p>
-                            <p className="text-xs text-slate-400">{l.city} · {l.propCount} Objekte · {l.beds} Betten</p>
+                            <p className="text-xs text-slate-400">{l.city} · {l.propCount} Portfolio · {l.beds} Betten</p>
                           </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors flex-shrink-0" />
@@ -693,7 +693,7 @@ export default function AnalyticsPage() {
           {drillLevel === 'properties' && (
             <>
               <h2 className="font-semibold text-slate-900 mb-3">
-                Objekte in {selectedLocation?.name}
+                Portfolio in {selectedLocation?.name}
                 {selectedMonth !== 'all' && (
                   <span className="text-sm font-normal text-blue-600 ml-2">
                     · {last24Months.find(m => m.value === selectedMonth)?.label}
@@ -701,7 +701,7 @@ export default function AnalyticsPage() {
                 )}
               </h2>
               {propData.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-xl border border-slate-200">Keine Objekte gefunden</p>
+                <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-xl border border-slate-200">Kein Portfolio gefunden</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-5">
                   {propData.map(p => {
@@ -1059,7 +1059,7 @@ export default function AnalyticsPage() {
                             <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: loc.color }} />
                             <div>
                               <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{loc.name}</p>
-                              <p className="text-xs text-slate-400">{loc.city} · {props.length} Objekte · {beds} Betten</p>
+                              <p className="text-xs text-slate-400">{loc.city} · {props.length} Portfolio · {beds} Betten</p>
                             </div>
                           </div>
                           <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-400 transition-colors flex-shrink-0" />
@@ -1099,7 +1099,7 @@ export default function AnalyticsPage() {
                 <span className="text-sm font-normal text-blue-600 ml-2">· {selectedPeriodLabel}</span>
               </h2>
               {propsForLocation.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-xl border border-slate-200">Keine Objekte gefunden</p>
+                <p className="text-sm text-slate-400 text-center py-8 bg-white rounded-xl border border-slate-200">Kein Portfolio gefunden</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-5">
                   {propsForLocation.map(p => {

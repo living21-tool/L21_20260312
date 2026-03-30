@@ -18,6 +18,19 @@ const statusColors: Record<string, string> = {
   storniert:    'bg-red-400 hover:bg-red-500',
 }
 
+function mixColorWithWhite(hex: string, colorWeight: number) {
+  const normalized = hex.replace('#', '')
+  const safeHex = normalized.length === 3
+    ? normalized.split('').map(char => `${char}${char}`).join('')
+    : normalized
+
+  if (!/^[0-9a-fA-F]{6}$/.test(safeHex)) return hex
+
+  const channels = safeHex.match(/.{2}/g)?.map(value => parseInt(value, 16)) ?? [255, 255, 255]
+  const mixed = channels.map(channel => Math.round(255 - (255 - channel) * colorWeight))
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`
+}
+
 export default function KalenderPage() {
   const { bookings: allBookings, loading: loadingB } = useBookings()
   const { properties: allProperties, loading: loadingP } = useProperties()
@@ -35,11 +48,15 @@ export default function KalenderPage() {
     () => Array.from({ length: DAYS_TO_SHOW }, (_, i) => addDays(startDate, i)),
     [startDate]
   )
+  const today = new Date()
+  const todayOffset = differenceInDays(today, startDate)
+  const todayVisible = todayOffset >= 0 && todayOffset < DAYS_TO_SHOW
 
   const toggleLoc = (id: string) =>
     setCollapsedLocs(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
 
@@ -145,35 +162,47 @@ export default function KalenderPage() {
       </div>
 
       {/* Calendar Grid */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white">
 
         {/* Header row — day numbers */}
-        <div className="flex border-b-2 border-slate-200 bg-slate-50 sticky top-0 z-30">
+        <div className="sticky top-0 z-30 flex border-b-2 border-slate-200 bg-slate-50 shadow-sm">
           <div className="w-44 flex-shrink-0 px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide border-r border-slate-200">
             Objekt
           </div>
-          <div className="flex-1 flex">
+          <div className="relative flex-1">
+            {todayVisible && (
+              <div
+                className="pointer-events-none absolute inset-y-0 z-10"
+                style={{
+                  left: `${(todayOffset * 100) / DAYS_TO_SHOW}%`,
+                  width: `${100 / DAYS_TO_SHOW}%`,
+                }}
+              />
+            )}
+            <div className="flex">
             {days.map((day, i) => {
-              const isWeekend = day.getDay() === 0 || day.getDay() === 6
-              const todayMark = isSameDay(day, new Date())
+              const todayMark = isSameDay(day, today)
               return (
                 <div
                   key={i}
                   className={cn(
-                    'flex-1 text-center py-2 border-r border-slate-100 text-xs',
-                    isWeekend ? 'bg-slate-100/70' : '',
-                    todayMark ? 'bg-blue-50' : ''
+                    'relative flex-1 text-center py-2 border-r border-slate-100 text-xs',
+                    todayMark ? 'bg-blue-50/80' : ''
                   )}
                 >
-                  <div className={cn('font-semibold', todayMark ? 'text-blue-600' : 'text-slate-600')}>
+                  {todayMark && (
+                    <div className="absolute inset-x-1 top-1 h-1 rounded-full bg-blue-500/80" />
+                  )}
+                  <div className={cn('font-semibold', todayMark ? 'text-blue-700' : 'text-slate-600')}>
                     {format(day, 'd')}
                   </div>
-                  <div className={cn('text-slate-400', todayMark ? 'text-blue-400' : '')}>
+                  <div className={cn('text-slate-400', todayMark ? 'text-blue-500' : '')}>
                     {format(day, 'EEE', { locale: de }).slice(0, 2)}
                   </div>
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
 
@@ -183,20 +212,21 @@ export default function KalenderPage() {
           const locBookingsCount = allBookings.filter(
             b => props.some(p => p.id === b.propertyId) && b.status !== 'storniert'
           ).length
+          const locationRowBackground = mixColorWithWhite(loc.color, 0.12)
 
           return (
             <div key={loc.id}>
 
               {/* ── Standort-Trennzeile ── */}
               <div
-                className="flex items-center border-b border-slate-200 cursor-pointer select-none sticky top-[60px] z-20"
-                style={{ backgroundColor: `${loc.color}18` }}
+                className="sticky top-[53px] z-20 flex items-center border-b border-slate-200 cursor-pointer select-none"
+                style={{ backgroundColor: locationRowBackground }}
                 onClick={() => toggleLoc(loc.id)}
               >
                 {/* Left label cell */}
                 <div
                   className="w-44 flex-shrink-0 px-3 py-2 border-r flex items-center gap-2"
-                  style={{ borderColor: `${loc.color}40` }}
+                  style={{ borderColor: `${loc.color}40`, backgroundColor: locationRowBackground }}
                 >
                   <div
                     className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -208,7 +238,10 @@ export default function KalenderPage() {
                   </span>
                 </div>
                 {/* Right info cell */}
-                <div className="flex-1 px-3 py-2 flex items-center gap-3">
+                <div
+                  className="flex-1 px-3 py-2 flex items-center gap-3"
+                  style={{ backgroundColor: locationRowBackground }}
+                >
                   <span
                     className="text-xs font-semibold px-2 py-0.5 rounded-full"
                     style={{ color: loc.color, backgroundColor: `${loc.color}20` }}
@@ -253,12 +286,10 @@ export default function KalenderPage() {
                       {/* Background grid */}
                       <div className="absolute inset-0 flex pointer-events-none">
                         {days.map((day, i) => {
-                          const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                          const todayMark = isSameDay(day, new Date())
+                          const todayMark = isSameDay(day, today)
                           return (
                             <div key={i} className={cn(
                               'flex-1 border-r border-slate-100',
-                              isWeekend ? 'bg-slate-50' : '',
                               todayMark ? 'bg-blue-50/50' : ''
                             )} />
                           )
@@ -297,7 +328,7 @@ export default function KalenderPage() {
 
         {groups.length === 0 && (
           <div className="text-center py-16 text-slate-400 text-sm">
-            Keine Objekte für diesen Standort gefunden.
+            Kein Portfolio für diesen Standort gefunden.
           </div>
         )}
       </div>

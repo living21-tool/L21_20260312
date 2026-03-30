@@ -112,7 +112,7 @@ export default function EinstellungenPage() {
             </div>
             <div>
               <h2 className="font-semibold text-slate-900">Alle Daten löschen</h2>
-              <p className="text-xs text-slate-500">Standorte, Objekte, Kunden und Buchungen dauerhaft entfernen</p>
+              <p className="text-xs text-slate-500">Standorte, Portfolio, Kunden und Buchungen dauerhaft entfernen</p>
             </div>
           </div>
 

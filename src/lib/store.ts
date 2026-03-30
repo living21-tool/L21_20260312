@@ -2,13 +2,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Property, Location, Customer, Booking } from './types'
 import { supabase } from './supabase'
+import { normalizeLocationName } from './utils'
 
 // ─── Mapper: DB (snake_case) → App (camelCase) ────────────────────────────────
 
 function mapLocation(r: Record<string, unknown>): Location {
   return {
     id:      r.id as string,
-    name:    r.name as string,
+    name:    normalizeLocationName(r.name as string),
     city:    r.city as string,
     country: r.country as string,
     color:   r.color as string,
@@ -93,7 +94,7 @@ export function useLocations() {
 
   const add = async (loc: Omit<Location, 'id'>): Promise<Location> => {
     const id = `loc-${Date.now()}`
-    const row = { id, name: loc.name, city: loc.city, country: loc.country, color: loc.color }
+    const row = { id, name: normalizeLocationName(loc.name), city: loc.city, country: loc.country, color: loc.color }
     const { data, error } = await supabase.from('locations').insert(row).select().single()
     if (error) throw error
     const newLoc = mapLocation(data)
@@ -102,24 +103,28 @@ export function useLocations() {
   }
 
   const upsert = async (loc: Location): Promise<void> => {
-    const row = { id: loc.id, name: loc.name, city: loc.city, country: loc.country, color: loc.color }
+    const normalizedLoc = { ...loc, name: normalizeLocationName(loc.name) }
+    const row = { id: normalizedLoc.id, name: normalizedLoc.name, city: normalizedLoc.city, country: normalizedLoc.country, color: normalizedLoc.color }
     const { error } = await supabase.from('locations').upsert(row)
     if (error) throw error
     setLocations(prev => prev.some(l => l.id === loc.id)
-      ? prev.map(l => l.id === loc.id ? loc : l)
-      : [...prev, loc]
+      ? prev.map(l => l.id === loc.id ? normalizedLoc : l)
+      : [...prev, normalizedLoc]
     )
   }
 
   const update = async (id: string, data: Partial<Location>): Promise<void> => {
     const row: Record<string, unknown> = {}
-    if (data.name    !== undefined) row.name    = data.name
+    if (data.name    !== undefined) row.name    = normalizeLocationName(data.name)
     if (data.city    !== undefined) row.city    = data.city
     if (data.country !== undefined) row.country = data.country
     if (data.color   !== undefined) row.color   = data.color
     const { error } = await supabase.from('locations').update(row).eq('id', id)
     if (error) throw error
-    setLocations(prev => prev.map(l => l.id === id ? { ...l, ...data } : l))
+    setLocations(prev => prev.map(l => l.id === id
+      ? { ...l, ...data, name: data.name !== undefined ? normalizeLocationName(data.name) : l.name }
+      : l
+    ))
   }
 
   const remove = async (id: string): Promise<void> => {

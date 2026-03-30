@@ -396,7 +396,7 @@ export default function SmartBookingPage() {
         </Link>
         <div className="flex items-center gap-2">
           <Zap size={20} className="text-amber-500" />
-          <h1 className="text-2xl font-bold text-slate-900">Smart Booking</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Leerstand</h1>
         </div>
       </div>
 
@@ -490,14 +490,14 @@ export default function SmartBookingPage() {
                       const bedsAtLocation = propsAtLocation.reduce((sum, property) => sum + property.beds, 0)
                       return (
                         <option key={location.id} value={location.id}>
-                          {location.name} - {propsAtLocation.length} Objekte, {bedsAtLocation} Betten
+                          {location.name} - {propsAtLocation.length} Portfolio, {bedsAtLocation} Betten
                         </option>
                       )
                     })}
                   </select>
                   {selectedLocation && (
                     <p className="text-xs text-slate-500 mt-1">
-                      {locationProps.length} Objekte - {locationBeds} Betten gesamt am Standort {selectedLocation.name}
+                      {locationProps.length} Portfolio - {locationBeds} Betten gesamt am Standort {selectedLocation.name}
                     </p>
                   )}
                 </div>
@@ -613,7 +613,7 @@ export default function SmartBookingPage() {
                           item.strategy === 'fewest-properties' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
                         }`}
                       >
-                        Wenige Objekte
+                        Wenig Portfolio
                       </button>
                       <button
                         onClick={() => updateRequestField(item.id, 'strategy', 'cheapest-first')}
@@ -1109,7 +1109,7 @@ export default function SmartBookingPage() {
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
             >
               <Zap size={16} />
-              Weitere Smart Booking
+              Weiteren Leerstand anlegen
             </button>
             <Link
               href="/buchungen"

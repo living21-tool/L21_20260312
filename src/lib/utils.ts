@@ -20,6 +20,21 @@ export function formatDateShort(dateStr: string): string {
   return format(parseISO(dateStr), 'dd.MM.', { locale: de })
 }
 
+export function normalizeLocationName(name: string): string {
+  return name.replace(/^NRW\s+/i, '').trim()
+}
+
+export function formatLocationLabel(name?: string | null, city?: string | null, separator = ' · '): string {
+  const normalizedName = name ? normalizeLocationName(name) : ''
+  const trimmedCity = city?.trim() ?? ''
+
+  if (normalizedName && trimmedCity) {
+    return normalizedName === trimmedCity ? normalizedName : `${normalizedName}${separator}${trimmedCity}`
+  }
+
+  return normalizedName || trimmedCity
+}
+
 export function calcNights(checkIn: string, checkOut: string): number {
   return differenceInDays(parseISO(checkOut), parseISO(checkIn))
 }

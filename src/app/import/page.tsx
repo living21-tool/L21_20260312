@@ -162,18 +162,17 @@ function buildPositions(detail: LexInvoice, properties: Property[]): ParsedPosit
     }]
   }
 
-  return lines.map((li: LexLineItem, idx: number) => {
+  // Erster Durchlauf: Positionen aufbauen
+  const positions: ParsedPosition[] = lines.map((li: LexLineItem, idx: number) => {
     const lineText = [li.name ?? '', li.description ?? ''].join(' ').trim()
 
     // Endreinigung erkennen
     const isCleaning = CLEANING_RE.test(lineText)
     const positionType: 'booking' | 'cleaning' = isCleaning ? 'cleaning' : 'booking'
 
-    // Objekt: Für Endreinigungen nicht matchen (werden manuell zugeordnet)
-    const prop = isCleaning ? undefined : (
-      matchProperty(lineText, properties)
-      ?? (lines.length === 1 ? matchProperty(fullText, properties) : undefined)
-    )
+    // Objekt: Auch für Endreinigungen versuchen (ShortCode im Text)
+    const prop = matchProperty(lineText, properties)
+      ?? (!isCleaning && lines.length === 1 ? matchProperty(fullText, properties) : undefined)
 
     // Datum: erst aus Positionstext, dann Fallback (für Buchungen)
     const dateParsed = extractDatesNights(lineText)
@@ -182,7 +181,7 @@ function buildPositions(detail: LexInvoice, properties: Property[]): ParsedPosit
     const nights   = isCleaning ? undefined : (dateParsed.nights   ?? fallback.nights)
 
     // Betten: immer aus dem im System hinterlegten Objekt — NICHT aus dem Rechnungstext
-    const bedsBooked: number | undefined = prop?.beds
+    const bedsBooked: number | undefined = prop && !isCleaning ? prop.beds : undefined
 
     // Betrag dieser Position
     const lineAmount = li.totalPrice?.totalNetAmount
@@ -190,7 +189,7 @@ function buildPositions(detail: LexInvoice, properties: Property[]): ParsedPosit
           ? li.quantity * li.unitPrice.netAmount : undefined)
 
     const confidence: 'high' | 'medium' | 'low' = isCleaning
-      ? (lineAmount != null ? 'medium' : 'low')   // Endreinigung: medium wenn Betrag bekannt
+      ? (lineAmount != null ? 'medium' : 'low')
       : prop && checkIn && checkOut ? 'high'
         : prop || (checkIn && checkOut) ? 'medium'
         : 'low'
@@ -199,12 +198,60 @@ function buildPositions(detail: LexInvoice, properties: Property[]): ParsedPosit
       index: idx,
       positionType,
       rawText: lineText.slice(0, 200),
-      propertyId: prop?.id,
+      propertyId: isCleaning ? undefined : prop?.id,
+      assignedPropertyId: undefined,
       checkIn, checkOut, nights, bedsBooked, lineAmount,
       confidence,
       status: 'pending' as const,
-    }
+      // Temporär: gematchtes Property für Cleaning merken
+      _cleaningMatchedPropId: isCleaning ? prop?.id : undefined,
+    } as ParsedPosition & { _cleaningMatchedPropId?: string }
   })
+
+  // Zweiter Durchlauf: Endreinigungen automatisch einer Wohnung zuweisen
+  const bookingPositions = positions.filter(p => p.positionType === 'booking' && p.propertyId)
+
+  for (const pos of positions) {
+    if (pos.positionType !== 'cleaning') continue
+
+    const tempProp = (pos as ParsedPosition & { _cleaningMatchedPropId?: string })._cleaningMatchedPropId
+
+    // 1. ShortCode im Reinigungstext erkannt → direkt zuweisen
+    if (tempProp && bookingPositions.some(b => b.propertyId === tempProp)) {
+      pos.assignedPropertyId = tempProp
+      pos.confidence = 'high'
+      continue
+    }
+
+    // 2. Nur eine Buchungsposition in der Rechnung → eindeutig zuweisbar
+    if (bookingPositions.length === 1) {
+      pos.assignedPropertyId = bookingPositions[0].propertyId
+      pos.confidence = 'high'
+      continue
+    }
+
+    // 3. Nächste Buchungsposition darüber finden (positionale Nähe)
+    if (bookingPositions.length > 1) {
+      let nearest: ParsedPosition | undefined
+      for (const bp of bookingPositions) {
+        if (bp.index < pos.index) nearest = bp
+      }
+      // Fallback: erste Buchungsposition darunter
+      if (!nearest) nearest = bookingPositions.find(bp => bp.index > pos.index)
+      if (nearest) {
+        pos.assignedPropertyId = nearest.propertyId
+        pos.confidence = 'medium'
+        continue
+      }
+    }
+  }
+
+  // Temporäres Feld entfernen
+  for (const pos of positions) {
+    delete (pos as unknown as Record<string, unknown>)._cleaningMatchedPropId
+  }
+
+  return positions
 }
 
 const confStyle = {
@@ -756,7 +803,6 @@ export default function ImportPage() {
   const totalPositions = items.reduce((s, i) => s + i.positions.length, 0)
   const acceptedPos    = items.reduce((s, i) => s + i.positions.filter(p => p.status === 'accepted').length, 0)
   const pendingItems   = items.filter(i => i.status === 'pending').length
-  const skippedItems   = items.filter(i => i.status === 'skipped').length
   const loadingCount   = items.filter(i => i.status === 'loading' || i.status === 'idle').length
 
   // Unmatched short codes from all positions
@@ -1017,7 +1063,7 @@ export default function ImportPage() {
                 <div>
                   <p className="text-sm font-semibold text-amber-900">Unbekannte Kürzel in Rechnungen</p>
                   <p className="text-xs text-amber-700 mt-0.5">Diese Kürzel konnten keinem Objekt zugeordnet werden. Trage den Kurzcode unter
-                    <a href="/objekte" className="underline font-medium ml-1">Objekte →</a> ein.</p>
+                    <a href="/objekte" className="underline font-medium ml-1">Portfolio →</a> ein.</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 mt-2">
@@ -1052,7 +1098,6 @@ export default function ImportPage() {
 
           {/* ── Invoice cards ── */}
           {items.map(item => {
-            const cust = customers.find(c => c.id === item.customerId)
             // Storno: "erledigt" wenn item.status === 'accepted'; regulär: alle Positionen erledigt
             const isFullyDone  = item.isStorno
               ? item.status === 'accepted'
@@ -1060,7 +1105,6 @@ export default function ImportPage() {
             const isFullySkipped = !item.isStorno && item.positions.every(p => p.status === 'skipped')
             const acceptedCount = item.positions.filter(p => p.status === 'accepted').length
             const pendingPositions = item.positions.filter(p => p.status === 'pending')
-            const multiPos = !item.isStorno && item.positions.length > 1
             // "Sonstige": alle Positionen haben weder Objekt noch Datum erkannt
             const allPosNoPropertyNoDate = !item.isStorno
               && item.positions.length > 0
@@ -1069,106 +1113,196 @@ export default function ImportPage() {
             const importedAsSonstige = bookings.some(
               b => b.lexofficeInvoiceId === item.voucher.id && b.source === 'lexoffice_sonstige'
             )
+            const isReady = item.status !== 'loading' && item.status !== 'idle'
+            const detail = item.detail
+            const lineItems = detail?.lineItems?.filter((l: LexLineItem) => l.type !== 'text') ?? []
 
             return (
               <div key={item.voucher.id} className={`bg-white rounded-xl border overflow-hidden transition-all ${
                 isFullyDone && !isFullySkipped ? 'border-emerald-200' :
                 isFullySkipped ? 'border-slate-100 opacity-50' :
-                item.status === 'loading' || item.status === 'idle' ? 'border-slate-200 animate-pulse' :
+                !isReady ? 'border-slate-200 animate-pulse' :
                 'border-slate-200'
               }`}>
-                {/* ── Invoice header ── */}
-                <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <FileText size={15} className="text-slate-400 flex-shrink-0" />
-                    <span className="text-sm font-bold text-slate-900">{item.voucher.voucherNumber}</span>
-                    <span className="text-xs text-slate-400">{item.voucher.voucherDate?.slice(0, 10)}</span>
-                    {item.isStorno && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">
-                        ⚠ {item.voucher.voucherStatus === 'voided' ? 'Storniert' : 'Gutschrift'}
-                        {item.referencedInvoiceNumber && item.voucher.voucherNumber !== item.referencedInvoiceNumber
-                          ? ` → ${item.referencedInvoiceNumber}` : ''}
-                      </span>
-                    )}
-                    {item.voucher.voucherType === 'orderconfirmation' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">Auftragsbestätigung</span>
-                    )}
-                    {item.voucher.voucherType === 'downpaymentinvoice' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">Abschlagsrechnung</span>
-                    )}
-                    {!item.isStorno && item.voucher.voucherStatus === 'paidoff' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Bezahlt</span>
-                    )}
-                    {!item.isStorno && item.voucher.voucherStatus === 'paid' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Teilw. bezahlt</span>
-                    )}
-                    {multiPos && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium flex items-center gap-1">
-                        <FileText size={10} />{item.positions.length} Positionen
-                      </span>
-                    )}
-                    {importedAsSonstige && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">Sonstiges</span>
-                    )}
-                    {isFullyDone && !isFullySkipped && (
-                      <CheckCircle size={15} className="text-emerald-500" />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-xs text-slate-400">{item.voucher.contactName}</p>
-                      <p className="text-sm font-bold text-slate-900">
-                        {formatCurrency(item.voucher.totalAmount ?? 0)}
-                      </p>
-                    </div>
-                    {/* Storno: Buchungen stornieren */}
-                    {item.isStorno && item.status !== 'loading' && item.status !== 'idle' && (
-                      item.status === 'accepted' ? (
-                        <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                          <CheckCircle size={14} /> Storniert
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => acceptStorno(item.voucher.id)}
-                          disabled={!item.referencedInvoiceNumber}
-                          className="text-xs px-2.5 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-1 disabled:opacity-40"
-                          title={item.referencedInvoiceNumber ? `Buchungen von ${item.referencedInvoiceNumber} stornieren` : 'Keine Rechnungsreferenz gefunden'}
-                        >
-                          <XCircle size={12} /> Buchungen stornieren
-                        </button>
-                      )
-                    )}
-                    {/* Sonstige: Als Sonstige speichern (kein Objekt, kein Zeitraum) */}
-                    {allPosNoPropertyNoDate && !isFullyDone && item.status !== 'loading' && item.status !== 'idle' && (
-                      <button
-                        onClick={() => acceptSonstige(item.voucher.id)}
-                        className="text-xs px-2.5 py-1.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 font-medium flex items-center gap-1"
-                        title="Als sonstige Rechnung speichern (kein Objekt, kein Zeitraum)"
-                      >
-                        <FileText size={12} /> Als Sonstige speichern
-                      </button>
-                    )}
-                    {/* Reguläre: Alle importieren / überspringen */}
-                    {!item.isStorno && pendingPositions.length > 1 && (
-                      <div className="flex gap-1">
-                        <button onClick={() => acceptAll(item.voucher.id)}
-                          className="text-xs px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium flex items-center gap-1">
-                          <CheckCircle size={12} /> Alle importieren
-                        </button>
-                        <button onClick={() => skipAll(item.voucher.id)}
-                          className="text-xs px-2 py-1.5 border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 flex items-center gap-1">
-                          <XCircle size={12} /> Alle überspr.
-                        </button>
+
+                {/* ═══ Rechnungskopf ═══ */}
+                <div className="px-5 py-4 bg-slate-50 border-b border-slate-100">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    {/* Links: Rechnungsinfos */}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <FileText size={16} className="text-slate-400 flex-shrink-0" />
+                        <span className="text-base font-bold text-slate-900 font-mono">{item.voucher.voucherNumber}</span>
+                        {item.isStorno && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">
+                            {item.voucher.voucherStatus === 'voided' ? 'Storniert' : 'Gutschrift'}
+                            {item.referencedInvoiceNumber && item.voucher.voucherNumber !== item.referencedInvoiceNumber
+                              ? ` → ${item.referencedInvoiceNumber}` : ''}
+                          </span>
+                        )}
+                        {item.voucher.voucherType === 'orderconfirmation' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">Auftragsbestätigung</span>
+                        )}
+                        {item.voucher.voucherType === 'downpaymentinvoice' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">Abschlagsrechnung</span>
+                        )}
+                        {!item.isStorno && item.voucher.voucherStatus === 'paidoff' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Bezahlt</span>
+                        )}
+                        {!item.isStorno && item.voucher.voucherStatus === 'paid' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Teilw. bezahlt</span>
+                        )}
+                        {!item.isStorno && item.voucher.voucherStatus === 'open' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Offen</span>
+                        )}
+                        {!item.isStorno && item.voucher.voucherStatus === 'draft' && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Entwurf</span>
+                        )}
+                        {importedAsSonstige && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">Sonstiges</span>
+                        )}
+                        {isFullyDone && !isFullySkipped && (
+                          <CheckCircle size={15} className="text-emerald-500" />
+                        )}
                       </div>
-                    )}
-                    {item.status === 'loading' || item.status === 'idle' ? (
-                      <RefreshCw size={16} className="text-slate-300 animate-spin" />
-                    ) : null}
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <span>Datum: <span className="text-slate-700 font-medium">{item.voucher.voucherDate?.slice(0, 10)}</span></span>
+                        <span>Kunde: <span className="text-slate-700 font-medium">{item.voucher.contactName}</span></span>
+                        {detail?.address?.street && (
+                          <span className="text-slate-400">{detail.address.street}, {detail.address.zip} {detail.address.city}</span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Rechts: Betrag + Aktionen */}
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        {detail?.totalPrice && (
+                          <p className="text-[10px] text-slate-400">
+                            Netto {formatCurrency(detail.totalPrice.totalNetAmount)} + MwSt {formatCurrency(detail.totalPrice.totalTaxAmount)}
+                          </p>
+                        )}
+                        <p className="text-lg font-bold text-slate-900">
+                          {formatCurrency(detail?.totalPrice?.totalGrossAmount ?? item.voucher.totalAmount ?? 0)}
+                        </p>
+                      </div>
+                      {!isReady && <RefreshCw size={16} className="text-slate-300 animate-spin" />}
+                    </div>
                   </div>
+
+                  {/* Aktionsleiste */}
+                  {isReady && (
+                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-200">
+                      {/* Storno */}
+                      {item.isStorno && (
+                        item.status === 'accepted' ? (
+                          <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                            <CheckCircle size={14} /> Storniert
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => acceptStorno(item.voucher.id)}
+                            disabled={!item.referencedInvoiceNumber}
+                            className="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center gap-1 disabled:opacity-40"
+                            title={item.referencedInvoiceNumber ? `Buchungen von ${item.referencedInvoiceNumber} stornieren` : 'Keine Rechnungsreferenz gefunden'}
+                          >
+                            <XCircle size={12} /> Buchungen stornieren
+                          </button>
+                        )
+                      )}
+                      {/* Sonstige */}
+                      {allPosNoPropertyNoDate && !isFullyDone && !item.isStorno && (
+                        <button
+                          onClick={() => acceptSonstige(item.voucher.id)}
+                          className="text-xs px-3 py-1.5 bg-slate-600 text-white rounded-lg hover:bg-slate-700 font-medium flex items-center gap-1"
+                        >
+                          <FileText size={12} /> Als Sonstige speichern
+                        </button>
+                      )}
+                      {/* Alle importieren / überspringen */}
+                      {!item.isStorno && pendingPositions.length > 0 && !allPosNoPropertyNoDate && (
+                        <>
+                          <button onClick={() => acceptAll(item.voucher.id)}
+                            className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium flex items-center gap-1">
+                            <CheckCircle size={12} /> {pendingPositions.length === 1 ? 'Importieren' : 'Alle importieren'}
+                          </button>
+                          <button onClick={() => skipAll(item.voucher.id)}
+                            className="text-xs px-2.5 py-1.5 border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 flex items-center gap-1">
+                            <XCircle size={12} /> Überspringen
+                          </button>
+                        </>
+                      )}
+                      {/* Fortschritt */}
+                      {!item.isStorno && item.positions.length > 0 && (
+                        <span className="ml-auto text-xs text-slate-400">
+                          {acceptedCount}/{item.positions.length} Pos. importiert
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* ── Storno-Info-Banner ── */}
-                {item.isStorno && item.status !== 'loading' && item.status !== 'idle' && (
+                {/* ═══ Lexoffice Positionen (Originaltabelle) ═══ */}
+                {isReady && !item.isStorno && lineItems.length > 0 && (
+                  <div className="border-b border-slate-100">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50/50 text-slate-400 uppercase text-[10px] tracking-wide">
+                          <th className="text-left pl-5 pr-2 py-2 font-medium">Pos.</th>
+                          <th className="text-left px-2 py-2 font-medium">Bezeichnung (Lexoffice)</th>
+                          <th className="text-right px-2 py-2 font-medium">Menge</th>
+                          <th className="text-left px-2 py-2 font-medium">Einheit</th>
+                          <th className="text-right px-2 py-2 font-medium">Einzelpreis</th>
+                          <th className="text-right px-2 py-2 font-medium">MwSt</th>
+                          <th className="text-right pl-2 pr-5 py-2 font-medium">Netto</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {lineItems.map((li: LexLineItem, liIdx: number) => {
+                          const isCleaning = CLEANING_RE.test([li.name ?? '', li.description ?? ''].join(' '))
+                          return (
+                            <tr key={liIdx} className={`${isCleaning ? 'bg-teal-50/30' : ''} hover:bg-slate-50/50`}>
+                              <td className="pl-5 pr-2 py-2 text-slate-400 font-mono">{liIdx + 1}</td>
+                              <td className="px-2 py-2">
+                                <p className="text-slate-800 font-medium">{li.name || '–'}</p>
+                                {li.description && (
+                                  <p className="text-slate-400 mt-0.5 truncate max-w-md">{li.description}</p>
+                                )}
+                              </td>
+                              <td className="px-2 py-2 text-right text-slate-700 font-mono">{li.quantity ?? '–'}</td>
+                              <td className="px-2 py-2 text-slate-500">{li.unitName ?? '–'}</td>
+                              <td className="px-2 py-2 text-right text-slate-700 font-mono">
+                                {li.unitPrice?.netAmount != null ? formatCurrency(li.unitPrice.netAmount) : '–'}
+                              </td>
+                              <td className="px-2 py-2 text-right text-slate-400">
+                                {li.unitPrice?.taxRatePercentage != null ? `${li.unitPrice.taxRatePercentage}%` : '–'}
+                              </td>
+                              <td className="pl-2 pr-5 py-2 text-right font-bold text-slate-900 font-mono">
+                                {li.totalPrice?.totalNetAmount != null
+                                  ? formatCurrency(li.totalPrice.totalNetAmount)
+                                  : li.quantity != null && li.unitPrice?.netAmount != null
+                                    ? formatCurrency(li.quantity * li.unitPrice.netAmount)
+                                    : '–'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      {detail?.totalPrice && (
+                        <tfoot>
+                          <tr className="bg-slate-50 border-t border-slate-200">
+                            <td colSpan={6} className="pl-5 pr-2 py-2 text-right text-slate-500 font-medium">Gesamt netto</td>
+                            <td className="pl-2 pr-5 py-2 text-right font-bold text-slate-900 font-mono">
+                              {formatCurrency(detail.totalPrice.totalNetAmount)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                )}
+
+                {/* ═══ Storno-Info-Banner ═══ */}
+                {item.isStorno && isReady && (
                   <div className="px-5 py-4">
                     {item.referencedInvoiceNumber ? (
                       <div className={`rounded-lg border p-4 ${item.status === 'accepted' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
@@ -1179,13 +1313,11 @@ export default function ImportPage() {
                               Storniert Rechnung:{' '}
                               <span className="font-mono">{item.referencedInvoiceNumber}</span>
                             </p>
-                            {/* Betroffene Buchungen anzeigen */}
                             {(() => {
                               const affected = bookings.filter(b => b.invoiceNumber === item.referencedInvoiceNumber)
                               if (affected.length === 0) return (
                                 <p className="text-xs text-red-700 mt-1.5">
-                                  ⚠ Keine importierten Buchungen für diese Rechnung gefunden.
-                                  Bitte zuerst die Originalrechnung importieren.
+                                  Keine importierten Buchungen gefunden. Bitte zuerst die Originalrechnung importieren.
                                 </p>
                               )
                               return (
@@ -1203,7 +1335,7 @@ export default function ImportPage() {
                                         </span>
                                         <span className="text-slate-500">{b.checkIn} – {b.checkOut}</span>
                                         {isAlreadyStorniert && (
-                                          <span className="text-xs text-red-600 font-medium">✓ Bereits storniert</span>
+                                          <span className="text-red-600 font-medium">Bereits storniert</span>
                                         )}
                                       </div>
                                     )
@@ -1218,262 +1350,282 @@ export default function ImportPage() {
                       <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                         <AlertCircle size={15} className="text-amber-500 flex-shrink-0" />
                         <p className="text-xs text-amber-800">
-                          Kein Bezug auf eine Rechnung in der API gefunden.
-                          Bitte überprüfe die Gutschrift manuell in Lexoffice.
+                          Kein Bezug auf eine Rechnung gefunden. Bitte manuell in Lexoffice prüfen.
                         </p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* ── Reguläre Positionen ── */}
-                {!item.isStorno && item.status !== 'loading' && item.status !== 'idle' && (
-                  <div className="divide-y divide-slate-100">
-                    {item.positions.map(pos => {
-                      const prop = properties.find(p => p.id === pos.propertyId)
-                      const loc  = locations.find(l => l.id === prop?.locationId)
-                      const isEditingThis = editingPos?.voucherId === item.voucher.id && editingPos.idx === pos.index
+                {/* ═══ Erkannte Buchungen (Zuordnung) ═══ */}
+                {!item.isStorno && isReady && item.positions.length > 0 && (
+                  <div>
+                    <div className="px-5 py-2 bg-blue-50/50 border-t border-b border-blue-100">
+                      <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">
+                        Erkannte Buchungen ({item.positions.filter(p => p.positionType === 'booking').length})
+                        {item.positions.some(p => p.positionType === 'cleaning') && (
+                          <span className="text-teal-600 ml-2">
+                            + {item.positions.filter(p => p.positionType === 'cleaning').length} Reinigung
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {item.positions.map(pos => {
+                        const prop = pos.positionType === 'cleaning'
+                          ? properties.find(p => p.id === pos.assignedPropertyId)
+                          : properties.find(p => p.id === pos.propertyId)
+                        const loc  = locations.find(l => l.id === prop?.locationId)
+                        const isEditingThis = editingPos?.voucherId === item.voucher.id && editingPos.idx === pos.index
 
-                      return (
-                        <div key={pos.index} className={`px-5 py-3 transition-all ${
-                          pos.status === 'accepted' ? 'bg-emerald-50/40' :
-                          pos.status === 'skipped'  ? 'opacity-40' : ''
-                        }`}>
-                          {/* Position row */}
-                          <div className="flex items-start gap-3 flex-wrap">
+                        return (
+                          <div key={pos.index} className={`px-5 py-3 transition-all ${
+                            pos.status === 'accepted' ? 'bg-emerald-50/40' :
+                            pos.status === 'skipped'  ? 'opacity-40' : ''
+                          }`}>
+                            <div className="flex items-start gap-3 flex-wrap">
 
-                            {/* Position number (nur bei multi) */}
-                            {multiPos && (
+                              {/* Position number */}
                               <span className="text-xs font-bold text-slate-400 w-5 flex-shrink-0 mt-0.5 text-center">
                                 {pos.index + 1}.
                               </span>
+
+                              <div className="flex-1 min-w-0">
+
+                                {/* ── Endreinigung ── */}
+                                {pos.positionType === 'cleaning' ? (
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                                      Endreinigung
+                                    </span>
+                                    <span className="text-sm font-bold text-slate-900">
+                                      {pos.lineAmount != null ? formatCurrency(pos.lineAmount) : '–'}
+                                    </span>
+                                    {/* Zuordnung anzeigen */}
+                                    <div className="flex items-center gap-1.5">
+                                      {pos.assignedPropertyId ? (
+                                        <span className="inline-flex items-center gap-1.5 text-xs">
+                                          <span className="text-slate-500">Zugeordnet:</span>
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-teal-50 border border-teal-200 font-medium text-teal-800">
+                                            {prop && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: loc?.color }} />}
+                                            {prop?.shortCode ?? prop?.name ?? pos.assignedPropertyId}
+                                          </span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs text-amber-600 flex items-center gap-1">
+                                          <AlertCircle size={11} /> Nicht zugeordnet
+                                        </span>
+                                      )}
+                                      {/* Dropdown zum Ändern (immer sichtbar bei pending) */}
+                                      {pos.status === 'pending' && (
+                                        <select
+                                          value={pos.assignedPropertyId ?? ''}
+                                          onChange={e => updatePosition(item.voucher.id, pos.index, { assignedPropertyId: e.target.value || undefined })}
+                                          className="text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500 border-slate-200 bg-white"
+                                        >
+                                          <option value="">– Ändern –</option>
+                                          {item.positions
+                                            .filter(bp => bp.positionType === 'booking' && bp.propertyId)
+                                            .map(bp => {
+                                              const bprop = properties.find(pr => pr.id === bp.propertyId)
+                                              return (
+                                                <option key={bp.index} value={bp.propertyId!}>
+                                                  {bprop?.shortCode ?? bprop?.name ?? bp.propertyId}
+                                                </option>
+                                              )
+                                            })
+                                          }
+                                        </select>
+                                      )}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* ── Reguläre Buchungsposition ── */
+                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1 text-sm">
+                                    {/* Objekt */}
+                                    <div>
+                                      <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Objekt</p>
+                                      {prop ? (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: loc?.color }} />
+                                          <span className="font-medium text-slate-800 truncate text-xs">{prop.shortCode || prop.name}</span>
+                                          {prop.shortCode && (
+                                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded font-mono font-bold flex-shrink-0">
+                                              {prop.shortCode}
+                                            </span>
+                                          )}
+                                        </div>
+                                      ) : pos.status === 'pending' ? (
+                                        <PropertySearchInput
+                                          properties={properties}
+                                          locations={locations}
+                                          value={pos.propertyId ?? ''}
+                                          onChange={propertyId => updatePosition(
+                                            item.voucher.id, pos.index,
+                                            { propertyId: propertyId || undefined }
+                                          )}
+                                        />
+                                      ) : (
+                                        <p className="text-xs text-amber-600 flex items-center gap-1">
+                                          <AlertCircle size={11} /> Nicht erkannt
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {/* Zeitraum */}
+                                    <div>
+                                      <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Zeitraum</p>
+                                      {pos.checkIn && pos.checkOut ? (
+                                        <p className="text-xs font-medium text-slate-800">
+                                          {pos.checkIn} – {pos.checkOut}
+                                          {pos.nights && <span className="text-slate-400"> · {pos.nights}N</span>}
+                                        </p>
+                                      ) : (
+                                        <p className="text-xs text-amber-600 flex items-center gap-1">
+                                          <AlertCircle size={11} /> Setzen
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {/* Betten */}
+                                    <div>
+                                      <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Betten</p>
+                                      <p className="text-xs font-medium text-slate-800">
+                                        {pos.bedsBooked ? `${pos.bedsBooked} Betten` : '–'}
+                                      </p>
+                                    </div>
+
+                                    {/* Betrag */}
+                                    <div>
+                                      <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Netto</p>
+                                      <p className="text-sm font-bold text-slate-900">
+                                        {pos.lineAmount != null ? formatCurrency(pos.lineAmount) : '–'}
+                                      </p>
+                                    </div>
+
+                                    {/* Bettenpreis berechnet */}
+                                    <div>
+                                      <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">€/Bett/N</p>
+                                      {pos.lineAmount != null && pos.nights && pos.bedsBooked ? (
+                                        <p className="text-xs font-semibold text-blue-700">
+                                          {formatCurrency(Math.round(pos.lineAmount / (pos.nights * pos.bedsBooked) * 100) / 100)}
+                                        </p>
+                                      ) : (
+                                        <p className="text-xs text-slate-400">–</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {pos.status === 'pending' && (
+                                  <>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${confStyle[pos.confidence]}`}>
+                                      {confLabel[pos.confidence]}
+                                    </span>
+                                    {pos.positionType === 'booking' && (
+                                      <button
+                                        onClick={() => setEditingPos(isEditingThis ? null : { voucherId: item.voucher.id, idx: pos.index })}
+                                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                                        title="Bearbeiten"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => skipPosition(item.voucher.id, pos.index)}
+                                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                                      title="Überspringen"
+                                    >
+                                      <XCircle size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => acceptPosition(item.voucher.id, pos.index)}
+                                      disabled={
+                                        pos.positionType === 'cleaning'
+                                          ? !pos.assignedPropertyId
+                                          : !pos.checkIn || !pos.checkOut
+                                      }
+                                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg disabled:opacity-30"
+                                      title={pos.positionType === 'cleaning' ? 'Endreinigung importieren' : 'Als Buchung importieren'}
+                                    >
+                                      <CheckCircle size={16} />
+                                    </button>
+                                  </>
+                                )}
+                                {pos.status === 'accepted' && (
+                                  <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                                    <CheckCircle size={14} /> Importiert
+                                  </span>
+                                )}
+                                {pos.status === 'skipped' && (
+                                  <span className="text-xs text-slate-400">Übersprungen</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Raw text */}
+                            {pos.rawText && !isEditingThis && pos.status === 'pending' && (
+                              <p className="text-xs text-slate-400 italic mt-1 truncate pl-8">
+                                „{pos.rawText}"
+                              </p>
                             )}
 
-                            {/* Main content */}
-                            <div className="flex-1 min-w-0">
-
-                              {/* ── Endreinigung ── */}
-                              {pos.positionType === 'cleaning' ? (
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
-                                    🧹 Endreinigung
-                                  </span>
-                                  <span className="text-sm font-bold text-slate-900">
-                                    {pos.lineAmount != null ? formatCurrency(pos.lineAmount) : '–'}
-                                  </span>
-                                  {/* Zuordnen zu Wohnung */}
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs text-slate-500">Zuordnen zu:</span>
-                                    <select
-                                      value={pos.assignedPropertyId ?? ''}
-                                      onChange={e => updatePosition(item.voucher.id, pos.index, { assignedPropertyId: e.target.value || undefined })}
-                                      className={`text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500 ${
-                                        pos.assignedPropertyId ? 'border-teal-300 bg-teal-50' : 'border-amber-300 bg-amber-50'
-                                      }`}
-                                    >
-                                      <option value="">– Wohnung auswählen –</option>
-                                      {item.positions
-                                        .filter(bp => bp.positionType === 'booking' && bp.propertyId)
-                                        .map(bp => {
-                                          const bprop = properties.find(pr => pr.id === bp.propertyId)
-                                          return (
-                                            <option key={bp.index} value={bp.propertyId!}>
-                                              {bprop?.shortCode ?? bprop?.name ?? bp.propertyId}
-                                            </option>
-                                          )
-                                        })
-                                      }
-                                    </select>
-                                  </div>
+                            {/* Inline edit */}
+                            {isEditingThis && pos.status === 'pending' && (
+                              <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 md:grid-cols-5 gap-3 pl-8">
+                                <div>
+                                  <label className="block text-xs text-slate-500 mb-1">Objekt</label>
+                                  <PropertySearchInput
+                                    properties={properties}
+                                    locations={locations}
+                                    value={pos.propertyId ?? ''}
+                                    onChange={propertyId => updatePosition(
+                                      item.voucher.id, pos.index,
+                                      { propertyId: propertyId || undefined }
+                                    )}
+                                  />
                                 </div>
-                              ) : (
-                                /* ── Reguläre Buchungsposition ── */
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1 text-sm">
-
-                                  {/* Objekt */}
-                                  <div>
-                                    <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Objekt</p>
-                                    {prop ? (
-                                      <div className="flex items-center gap-1.5">
-                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: loc?.color }} />
-                                        <span className="font-medium text-slate-800 truncate text-xs">{prop.shortCode || prop.name}</span>
-                                        {prop.shortCode && (
-                                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded font-mono font-bold flex-shrink-0">
-                                            {prop.shortCode}
-                                          </span>
-                                        )}
-                                      </div>
-                                    ) : pos.status === 'pending' ? (
-                                      <PropertySearchInput
-                                        properties={properties}
-                                        locations={locations}
-                                        value={pos.propertyId ?? ''}
-                                        onChange={propertyId => updatePosition(
-                                          item.voucher.id, pos.index,
-                                          { propertyId: propertyId || undefined }
-                                        )}
-                                      />
-                                    ) : (
-                                      <p className="text-xs text-amber-600 flex items-center gap-1">
-                                        <AlertCircle size={11} /> Nicht erkannt
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {/* Zeitraum */}
-                                  <div>
-                                    <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Zeitraum</p>
-                                    {pos.checkIn && pos.checkOut ? (
-                                      <p className="text-xs font-medium text-slate-800">
-                                        {pos.checkIn} – {pos.checkOut}
-                                        {pos.nights && <span className="text-slate-400"> · {pos.nights}N</span>}
-                                      </p>
-                                    ) : (
-                                      <p className="text-xs text-amber-600 flex items-center gap-1">
-                                        <AlertCircle size={11} /> Setzen
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {/* Betten */}
-                                  <div>
-                                    <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Betten</p>
-                                    <p className="text-xs font-medium text-slate-800">
-                                      {pos.bedsBooked ? `${pos.bedsBooked} Betten` : '–'}
-                                    </p>
-                                  </div>
-
-                                  {/* Betrag */}
-                                  <div>
-                                    <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">Betrag (netto)</p>
-                                    <p className="text-sm font-bold text-slate-900">
-                                      {pos.lineAmount != null ? formatCurrency(pos.lineAmount) : '–'}
-                                    </p>
-                                  </div>
-
-                                  {/* Bettenpreis berechnet */}
-                                  <div>
-                                    <p className="text-xs text-slate-400 font-medium uppercase mb-0.5">€/Bett/N</p>
-                                    {pos.lineAmount != null && pos.nights && pos.bedsBooked ? (
-                                      <p className="text-xs font-semibold text-blue-700">
-                                        {formatCurrency(Math.round(pos.lineAmount / (pos.nights * pos.bedsBooked) * 100) / 100)}
-                                      </p>
-                                    ) : (
-                                      <p className="text-xs text-slate-400">–</p>
-                                    )}
-                                  </div>
+                                <div>
+                                  <label className="block text-xs text-slate-500 mb-1">Anreise</label>
+                                  <input type="date" value={pos.checkIn ?? ''}
+                                    onChange={e => updatePosition(item.voucher.id, pos.index, { checkIn: e.target.value })}
+                                    className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
                                 </div>
-                              )}
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {pos.status === 'pending' && (
-                                <>
-                                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${confStyle[pos.confidence]}`}>
-                                    {confLabel[pos.confidence]}
-                                  </span>
-                                  {/* Bearbeiten-Button nur für Buchungspositionen */}
-                                  {pos.positionType === 'booking' && (
-                                    <button
-                                      onClick={() => setEditingPos(isEditingThis ? null : { voucherId: item.voucher.id, idx: pos.index })}
-                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                                      title="Bearbeiten"
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => skipPosition(item.voucher.id, pos.index)}
-                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                                    title="Überspringen"
-                                  >
-                                    <XCircle size={16} />
-                                  </button>
+                                <div>
+                                  <label className="block text-xs text-slate-500 mb-1">Abreise</label>
+                                  <input type="date" value={pos.checkOut ?? ''}
+                                    onChange={e => updatePosition(item.voucher.id, pos.index, { checkOut: e.target.value })}
+                                    className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-slate-500 mb-1">Betten</label>
+                                  <input type="number" min={1} value={pos.bedsBooked ?? ''}
+                                    onChange={e => updatePosition(item.voucher.id, pos.index, { bedsBooked: parseInt(e.target.value) || undefined })}
+                                    className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                </div>
+                                <div className="flex items-end">
                                   <button
                                     onClick={() => acceptPosition(item.voucher.id, pos.index)}
-                                    disabled={
-                                      pos.positionType === 'cleaning'
-                                        ? !pos.assignedPropertyId
-                                        : !pos.checkIn || !pos.checkOut
-                                    }
-                                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg disabled:opacity-30"
-                                    title={pos.positionType === 'cleaning' ? 'Endreinigung zuordnen & importieren' : 'Als Buchung importieren'}
+                                    disabled={!pos.checkIn || !pos.checkOut}
+                                    className="w-full py-1.5 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-40 flex items-center justify-center gap-1"
                                   >
-                                    <CheckCircle size={16} />
+                                    <CheckCircle size={12} /> Importieren
                                   </button>
-                                </>
-                              )}
-                              {pos.status === 'accepted' && (
-                                <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
-                                  <CheckCircle size={14} /> Importiert
-                                </span>
-                              )}
-                              {pos.status === 'skipped' && (
-                                <span className="text-xs text-slate-400">Übersprungen</span>
-                              )}
-                            </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
-
-                          {/* Raw text preview */}
-                          {pos.rawText && !isEditingThis && pos.status === 'pending' && (
-                            <p className="text-xs text-slate-400 italic mt-1 truncate pl-8">
-                              „{pos.rawText}"
-                            </p>
-                          )}
-
-                          {/* Inline edit form */}
-                          {isEditingThis && pos.status === 'pending' && (
-                            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 md:grid-cols-5 gap-3 pl-8">
-                              <div>
-                                <label className="block text-xs text-slate-500 mb-1">Objekt</label>
-                                <PropertySearchInput
-                                  properties={properties}
-                                  locations={locations}
-                                  value={pos.propertyId ?? ''}
-                                  onChange={propertyId => updatePosition(
-                                    item.voucher.id, pos.index,
-                                    { propertyId: propertyId || undefined }
-                                  )}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-slate-500 mb-1">Anreise</label>
-                                <input type="date" value={pos.checkIn ?? ''}
-                                  onChange={e => updatePosition(item.voucher.id, pos.index, { checkIn: e.target.value })}
-                                  className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-slate-500 mb-1">Abreise</label>
-                                <input type="date" value={pos.checkOut ?? ''}
-                                  onChange={e => updatePosition(item.voucher.id, pos.index, { checkOut: e.target.value })}
-                                  className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-slate-500 mb-1">Betten</label>
-                                <input type="number" min={1} value={pos.bedsBooked ?? ''}
-                                  onChange={e => updatePosition(item.voucher.id, pos.index, { bedsBooked: parseInt(e.target.value) || undefined })}
-                                  className="w-full text-xs border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                              </div>
-                              <div className="flex items-end">
-                                <button
-                                  onClick={() => acceptPosition(item.voucher.id, pos.index)}
-                                  disabled={!pos.checkIn || !pos.checkOut}
-                                  className="w-full py-1.5 bg-emerald-600 text-white rounded text-xs font-medium hover:bg-emerald-700 disabled:opacity-40 flex items-center justify-center gap-1"
-                                >
-                                  <CheckCircle size={12} /> Importieren
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Footer: import progress for multi-position invoices (nur für reguläre) */}
-                {!item.isStorno && multiPos && !isFullyDone && item.status !== 'loading' && item.status !== 'idle' && (
+                {/* Footer: Fortschrittsbalken */}
+                {!item.isStorno && item.positions.length > 1 && !isFullyDone && isReady && (
                   <div className="px-5 py-2 bg-slate-50 border-t border-slate-100">
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -1483,7 +1635,7 @@ export default function ImportPage() {
                         />
                       </div>
                       <span className="text-xs text-slate-500 flex-shrink-0">
-                        {acceptedCount}/{item.positions.length} Pos. importiert
+                        {acceptedCount}/{item.positions.length} Pos.
                       </span>
                     </div>
                   </div>
