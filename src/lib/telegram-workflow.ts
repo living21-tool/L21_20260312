@@ -28,8 +28,9 @@ type TelegramConversationStage =
   | 'awaiting_create_decision'
   | 'awaiting_customer'
   | 'awaiting_price'
-  | 'awaiting_cleaning'
   | 'awaiting_discount'
+  | 'awaiting_cleaning'
+  | 'awaiting_tax_rate'
   | 'awaiting_payment_term'
   | 'awaiting_draft_confirmation'
   | 'draft_created'
@@ -96,6 +97,19 @@ function isSkip(value: string) {
   return ['weiter', 'uebernehmen', 'übernehmen', 'skip', 'weiter so', 'passt', 'standard'].includes(normalize(value))
 }
 
+function looksLikeAvailabilityRequest(value: string) {
+  const normalized = normalize(value)
+  const hasBeds = /\b\d+\s*bett/.test(normalized) || normalized.includes(' betten')
+  const hasFree = normalized.includes('frei')
+  const hasDateSignal =
+    normalized.includes('von ') ||
+    normalized.includes('bis ') ||
+    /\d{1,2}\.\d{1,2}\.\d{2,4}/.test(normalized) ||
+    /\d{4}-\d{2}-\d{2}/.test(normalized)
+
+  return hasBeds && hasFree && hasDateSignal
+}
+
 function parseNumberFromText(value: string): number | null {
   const match = value.match(/-?\d+(?:[.,]\d+)?/)
   if (!match) return null
@@ -112,10 +126,10 @@ function buildHelpMessage() {
     '',
     '<b>Ablauf</b>',
     '1. Sende eine Verfügbarkeitsanfrage',
-    '2. Ich frage dich, ob ein Rechnungsentwurf erstellt werden soll',
-    '3. Ich frage Auftraggeber, Preis, Reinigung, Rabatt und Zahlungsziel ab',
-    '4. Ich fasse alles zusammen',
-    '5. Ich erstelle auf Wunsch den Lexoffice-Entwurf und danach die Buchungen',
+    '2. Ich antworte zuerst mit der Verfügbarkeit',
+    '3. Danach frage ich, ob ich für diese Verfügbarkeit weiterarbeiten soll',
+    '4. Dann frage ich Auftraggeber, Preis, Rabatt, Reinigung, Steuersatz und Zahlungsziel ab',
+    '5. Danach fasse ich alles zusammen und frage nach dem Lexoffice-Entwurf',
     '',
     '<b>Befehle</b>',
     '/neu - neuen Vorgang starten',
@@ -127,6 +141,7 @@ function buildHelpMessage() {
 function buildBookingPricePrompt(invoiceForm: InvoiceFormState) {
   const bookingLines = invoiceForm.lines.filter(line => line.kind === 'booking')
   const priceSummary = bookingLines.map(line => `${line.name}: ${formatMoney(line.unitPriceNet)}`).join(', ')
+
   return [
     'Wie soll der Bettenpreis sein?',
     `Aktuell: ${priceSummary || 'kein Preis gefunden'}`,
@@ -137,14 +152,26 @@ function buildBookingPricePrompt(invoiceForm: InvoiceFormState) {
 function buildCleaningPrompt(invoiceForm: InvoiceFormState) {
   const cleaningLines = invoiceForm.lines.filter(line => line.kind === 'cleaning')
   if (cleaningLines.length === 0) {
-    return 'Für diese Anfrage gibt es keine Reinigungsposition. Soll ich direkt den Rabatt abfragen? Antworte mit <code>ja</code>.'
+    return 'Für diese Anfrage gibt es keine Reinigungsposition. Antworte mit <code>übernehmen</code>, dann frage ich direkt den Steuersatz.'
   }
 
   const cleaningSummary = cleaningLines.map(line => `${line.name}: ${formatMoney(line.unitPriceNet)}`).join(', ')
   return [
-    'Wie soll die Reinigungspauschale sein?',
+    'Soll eine Endreinigung mit rein?',
     `Aktuell: ${cleaningSummary}`,
-    'Antworte mit einer Zahl wie <code>45</code> oder mit <code>übernehmen</code>.',
+    'Antworte mit einer Zahl wie <code>45</code>, mit <code>übernehmen</code> oder mit <code>0</code>.',
+  ].join('\n')
+}
+
+function buildTaxRatePrompt(invoiceForm: InvoiceFormState) {
+  const taxRates = Array.from(
+    new Set(invoiceForm.lines.filter(line => line.kind !== 'text').map(line => line.taxRate)),
+  )
+
+  return [
+    'Welcher Steuersatz soll gelten?',
+    `Aktuell: ${taxRates.join(', ') || 0}%`,
+    'Antworte mit <code>0</code>, <code>7</code> oder <code>19</code>.',
   ].join('\n')
 }
 
@@ -158,7 +185,7 @@ function formatInvoiceFormSummary(state: TelegramConversationState, customer?: C
   const totals = calculateInvoiceFormTotals(invoiceForm.lines, invoiceForm.totalDiscountPercentage)
   const linePreview = invoiceForm.lines
     .filter(line => line.kind !== 'text')
-    .map(line => `- ${line.name}: ${line.quantity} ${line.unitName} × ${formatMoney(line.unitPriceNet)}`)
+    .map(line => `- ${line.name}: ${line.quantity} ${line.unitName} × ${formatMoney(line.unitPriceNet)} · ${line.taxRate}%`)
     .slice(0, 12)
 
   return [
@@ -204,6 +231,26 @@ function setAllLinePrices(state: TelegramConversationState, lineKind: 'booking' 
   }
   if (!changed) {
     throw new Error('Es wurden keine passenden Positionen gefunden.')
+  }
+
+  state.draftInvoice = undefined
+}
+
+function setAllTaxRates(state: TelegramConversationState, taxRate: 0 | 7 | 19) {
+  if (!state.invoiceForm) {
+    throw new Error('Es gibt noch keinen aktiven Vorgang.')
+  }
+
+  state.invoiceForm = {
+    ...state.invoiceForm,
+    lines: state.invoiceForm.lines.map(line => (
+      line.kind === 'text'
+        ? line
+        : {
+            ...line,
+            taxRate,
+          }
+    )),
   }
 
   state.draftInvoice = undefined
@@ -294,7 +341,7 @@ async function handleAvailabilityStart(chatId: number | string, text: string): P
     reply: [
       availabilityReply,
       '',
-      'Willst du dafür einen Rechnungsentwurf erstellen?',
+      'Willst du für diese Verfügbarkeit eine Buchung bzw. einen Rechnungsentwurf erstellen?',
       'Antworte mit <code>Ja</code> oder <code>Nein</code>.',
     ].join('\n'),
   }
@@ -455,7 +502,7 @@ async function handleCreateDecision(chatId: number | string, state: TelegramConv
 
   return {
     handled: true,
-    reply: 'Bitte antworte mit <code>Ja</code> oder <code>Nein</code>. Willst du dafür einen Rechnungsentwurf erstellen?',
+    reply: 'Bitte antworte mit <code>Ja</code> oder <code>Nein</code>. Willst du für diese Verfügbarkeit weiterarbeiten?',
   }
 }
 
@@ -469,36 +516,10 @@ async function handlePriceStep(chatId: number | string, state: TelegramConversat
     if (amount === null || amount < 0) {
       return {
         handled: true,
-        reply: `${buildBookingPricePrompt(state.invoiceForm)}`,
+        reply: buildBookingPricePrompt(state.invoiceForm),
       }
     }
     setAllLinePrices(state, 'booking', amount)
-  }
-
-  state.stage = 'awaiting_cleaning'
-  await saveConversation(chatId, state)
-
-  return {
-    handled: true,
-    reply: buildCleaningPrompt(state.invoiceForm),
-  }
-}
-
-async function handleCleaningStep(chatId: number | string, state: TelegramConversationState, text: string): Promise<HandlerResult> {
-  if (!state.invoiceForm) {
-    throw new Error('Es gibt noch keinen aktiven Vorgang.')
-  }
-
-  const hasCleaningLines = state.invoiceForm.lines.some(line => line.kind === 'cleaning')
-  if (hasCleaningLines && !isSkip(text)) {
-    const amount = parseNumberFromText(text)
-    if (amount === null || amount < 0) {
-      return {
-        handled: true,
-        reply: buildCleaningPrompt(state.invoiceForm),
-      }
-    }
-    setAllLinePrices(state, 'cleaning', amount)
   }
 
   state.stage = 'awaiting_discount'
@@ -527,8 +548,55 @@ async function handleDiscountStep(chatId: number | string, state: TelegramConver
     state.invoiceForm.totalDiscountPercentage = amount
   }
 
-  state.stage = 'awaiting_payment_term'
+  state.stage = 'awaiting_cleaning'
   state.draftInvoice = undefined
+  await saveConversation(chatId, state)
+  return {
+    handled: true,
+    reply: buildCleaningPrompt(state.invoiceForm),
+  }
+}
+
+async function handleCleaningStep(chatId: number | string, state: TelegramConversationState, text: string): Promise<HandlerResult> {
+  if (!state.invoiceForm) {
+    throw new Error('Es gibt noch keinen aktiven Vorgang.')
+  }
+
+  const hasCleaningLines = state.invoiceForm.lines.some(line => line.kind === 'cleaning')
+  if (hasCleaningLines && !isSkip(text)) {
+    const amount = parseNumberFromText(text)
+    if (amount === null || amount < 0) {
+      return {
+        handled: true,
+        reply: buildCleaningPrompt(state.invoiceForm),
+      }
+    }
+    setAllLinePrices(state, 'cleaning', amount)
+  }
+
+  state.stage = 'awaiting_tax_rate'
+  await saveConversation(chatId, state)
+  return {
+    handled: true,
+    reply: buildTaxRatePrompt(state.invoiceForm),
+  }
+}
+
+async function handleTaxRateStep(chatId: number | string, state: TelegramConversationState, text: string): Promise<HandlerResult> {
+  if (!state.invoiceForm) {
+    throw new Error('Es gibt noch keinen aktiven Vorgang.')
+  }
+
+  const amount = parseNumberFromText(text)
+  if (amount !== 0 && amount !== 7 && amount !== 19) {
+    return {
+      handled: true,
+      reply: buildTaxRatePrompt(state.invoiceForm),
+    }
+  }
+
+  setAllTaxRates(state, amount as 0 | 7 | 19)
+  state.stage = 'awaiting_payment_term'
   await saveConversation(chatId, state)
   return {
     handled: true,
@@ -572,7 +640,7 @@ async function handleDraftConfirmationStep(chatId: number | string, state: Teleg
     await saveConversation(chatId, state)
     return {
       handled: true,
-      reply: 'Okay. Dann passe ich den Vorgang weiter an. ' + buildBookingPricePrompt(state.invoiceForm!),
+      reply: `Okay. Dann passe ich den Vorgang weiter an.\n\n${buildBookingPricePrompt(state.invoiceForm!)}`,
     }
   }
 
@@ -655,6 +723,10 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
     }
   }
 
+  if (looksLikeAvailabilityRequest(trimmed)) {
+    return handleAvailabilityStart(chatId, trimmed)
+  }
+
   if (state.stage === 'idle') {
     return handleAvailabilityStart(chatId, trimmed)
   }
@@ -673,12 +745,16 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
     return handlePriceStep(chatId, state, trimmed)
   }
 
+  if (state.stage === 'awaiting_discount') {
+    return handleDiscountStep(chatId, state, trimmed)
+  }
+
   if (state.stage === 'awaiting_cleaning') {
     return handleCleaningStep(chatId, state, trimmed)
   }
 
-  if (state.stage === 'awaiting_discount') {
-    return handleDiscountStep(chatId, state, trimmed)
+  if (state.stage === 'awaiting_tax_rate') {
+    return handleTaxRateStep(chatId, state, trimmed)
   }
 
   if (state.stage === 'awaiting_payment_term') {
