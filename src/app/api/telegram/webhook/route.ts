@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createTelegramAvailabilityMessage } from '@/lib/availability-response'
 import { parseAvailabilityMessage } from '@/lib/availability-message-parser'
 import { checkAvailability, loadLocations } from '@/lib/availability-service'
-import { sendTelegramMessage } from '@/lib/telegram'
+import { sendTelegramDocument, sendTelegramMessage } from '@/lib/telegram'
 import { handleTelegramWorkflowMessage } from '@/lib/telegram-workflow'
 
 type TelegramWebhookBody = {
@@ -38,6 +38,15 @@ export async function POST(req: NextRequest) {
       const workflowResult = await handleTelegramWorkflowMessage(chatId, text)
       if (workflowResult.handled) {
         await sendTelegramMessage(chatId, workflowResult.reply)
+        if (workflowResult.document) {
+          await sendTelegramDocument({
+            chatId,
+            fileName: workflowResult.document.fileName,
+            contentType: workflowResult.document.contentType,
+            data: workflowResult.document.data,
+            caption: workflowResult.document.caption,
+          })
+        }
         return NextResponse.json({ ok: true, workflow: true })
       }
 

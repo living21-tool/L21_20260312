@@ -19,7 +19,7 @@ import {
   type InvoiceFormState,
   type InvoiceLineItem,
 } from '@/lib/booking-workflow'
-import { createInvoice, getInvoice } from '@/lib/lexoffice'
+import { createInvoice, downloadInvoicePdf, getInvoice } from '@/lib/lexoffice'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import type { BookingStatus, Customer } from '@/lib/types'
 
@@ -68,6 +68,12 @@ type ConversationRow = {
 type HandlerResult = {
   reply: string
   handled: boolean
+  document?: {
+    fileName: string
+    contentType: string
+    data: ArrayBuffer
+    caption?: string
+  }
 }
 
 function defaultState(): TelegramConversationState {
@@ -652,6 +658,20 @@ async function handleDraftConfirmationStep(chatId: number | string, state: Teleg
   }
 
   const draft = await createDraftForState(state)
+  let document: HandlerResult['document']
+
+  try {
+    const pdf = await downloadInvoicePdf(draft.id)
+    document = {
+      fileName: pdf.fileName,
+      contentType: pdf.contentType,
+      data: pdf.buffer,
+      caption: `Lexoffice-PDF: ${draft.voucherNumber ?? draft.id}`,
+    }
+  } catch {
+    document = undefined
+  }
+
   await saveConversation(chatId, state)
   return {
     handled: true,
@@ -661,9 +681,12 @@ async function handleDraftConfirmationStep(chatId: number | string, state: Teleg
       draft.voucherStatus ? `Status: ${draft.voucherStatus}` : '',
       draft.lexofficeUrl,
       '',
+      document ? 'Ich schicke dir die PDF direkt hier in Telegram.' : 'Die PDF konnte ich noch nicht direkt anhängen. Nutze vorerst den Lexoffice-Link.',
+      '',
       'Soll ich jetzt auch die Buchungen anlegen?',
       'Antworte mit <code>Ja</code> oder <code>Nein</code>.',
     ].filter(Boolean).join('\n'),
+    document,
   }
 }
 

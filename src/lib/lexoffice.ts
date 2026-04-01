@@ -35,6 +35,37 @@ async function lexFetch(path: string, options?: RequestInit, retries = 3): Promi
   return res.json()
 }
 
+async function lexFetchBinary(path: string, options?: RequestInit, retries = 3): Promise<{ buffer: ArrayBuffer; contentType: string | null }> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${API_KEY}`,
+      'Accept': 'application/pdf, application/octet-stream, */*',
+      ...(options?.headers ?? {}),
+    },
+    cache: 'no-store',
+  })
+
+  if (res.status === 429 && retries > 0) {
+    const retryAfter = parseInt(res.headers.get('Retry-After') ?? '2', 10)
+    await delay((retryAfter || 2) * 1000)
+    return lexFetchBinary(path, options, retries - 1)
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    const message = text || res.statusText
+    const error = new Error(`Lexoffice API ${res.status}: ${message}`) as Error & { status?: number }
+    error.status = res.status
+    throw error
+  }
+
+  return {
+    buffer: await res.arrayBuffer(),
+    contentType: res.headers.get('Content-Type'),
+  }
+}
+
 // Small pause between sequential API calls to stay under rate limit
 export async function rateLimitedDelay() {
   await delay(300)
@@ -281,6 +312,66 @@ export async function createQuotation(payload: CreateInvoicePayload): Promise<{ 
     method: 'POST',
     body: JSON.stringify(payload),
   }) as Promise<{ id: string }>
+}
+
+async function tryRenderInvoiceDocument(invoiceId: string): Promise<string | null> {
+  const candidates = [
+    `/invoices/${invoiceId}/document`,
+    `/invoices/${invoiceId}/files`,
+  ]
+
+  for (const path of candidates) {
+    try {
+      const result = await lexFetch(path, { method: 'POST' }) as { documentFileId?: string }
+      if (result?.documentFileId) return result.documentFileId
+    } catch {
+      // try next inferred endpoint
+    }
+  }
+
+  return null
+}
+
+async function tryDownloadFile(fileId: string): Promise<{ buffer: ArrayBuffer; contentType: string | null } | null> {
+  const candidates = [
+    `/files/${fileId}`,
+    `/files/${fileId}?accept=application/pdf`,
+  ]
+
+  for (const path of candidates) {
+    try {
+      return await lexFetchBinary(path)
+    } catch {
+      // try next inferred endpoint
+    }
+  }
+
+  return null
+}
+
+export async function downloadInvoicePdf(invoiceId: string): Promise<{ buffer: ArrayBuffer; fileName: string; contentType: string }> {
+  const detail = await getInvoice(invoiceId)
+  let documentFileId = detail.files?.documentFileId
+
+  if (!documentFileId) {
+    documentFileId = await tryRenderInvoiceDocument(invoiceId) ?? undefined
+  }
+
+  if (!documentFileId) {
+    throw new Error('Für diesen Lexoffice-Beleg konnte keine PDF-Datei ermittelt werden.')
+  }
+
+  const file = await tryDownloadFile(documentFileId)
+  if (!file) {
+    throw new Error('Die PDF-Datei konnte aus Lexoffice nicht heruntergeladen werden.')
+  }
+
+  const fileName = `${detail.voucherNumber ?? invoiceId}.pdf`
+  return {
+    buffer: file.buffer,
+    fileName,
+    contentType: file.contentType ?? 'application/pdf',
+  }
 }
 
 // ─── Helper: contact display name ────────────────────────────────────────────

@@ -36,3 +36,33 @@ export async function sendTelegramMessage(chatId: number | string, text: string)
 
   return response.json()
 }
+
+export async function sendTelegramDocument(args: {
+  chatId: number | string
+  fileName: string
+  contentType?: string
+  data: ArrayBuffer
+  caption?: string
+}) {
+  const formData = new FormData()
+  const blob = new Blob([args.data], { type: args.contentType ?? 'application/pdf' })
+
+  formData.append('chat_id', String(args.chatId))
+  formData.append('document', blob, args.fileName)
+
+  if (args.caption?.trim()) {
+    formData.append('caption', args.caption.trim().slice(0, 1024))
+  }
+
+  const response = await fetch(getTelegramApiUrl('sendDocument'), {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Telegram sendDocument fehlgeschlagen: ${response.status} ${body}`)
+  }
+
+  return response.json()
+}
