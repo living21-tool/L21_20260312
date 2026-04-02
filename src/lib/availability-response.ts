@@ -24,8 +24,10 @@ export function createAvailabilitySummary(result: AvailabilityResult) {
 export function createTelegramAvailabilityMessage(
   result: AvailabilityResult,
   request: { checkIn: string; checkOut: string; bedsNeeded: number },
+  allocationOverride?: AvailabilityResult['allocation']['allocations'],
 ) {
-  const allocationLines = result.allocation.allocations.map(entry => {
+  const effectiveAllocations = allocationOverride ?? result.allocation.allocations
+  const allocationLines = effectiveAllocations.map(entry => {
     const label = entry.shortCode || entry.propertyName
     return `- ${label}: ${entry.bedsAllocated} Bett${entry.bedsAllocated === 1 ? '' : 'en'}`
   })

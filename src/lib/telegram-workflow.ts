@@ -20,6 +20,7 @@ import {
   calculateInvoiceFormTotals,
   createInitialInvoiceForm,
   DEFAULT_INVOICE_REMARK,
+  formatRange,
   inferCountryCode,
   type DraftInvoiceState,
   type InvoiceFormState,
@@ -308,7 +309,11 @@ function buildBookingPricePrompt(invoiceForm: InvoiceFormState) {
 function buildCleaningPrompt(invoiceForm: InvoiceFormState) {
   const cleaningLines = invoiceForm.lines.filter(line => line.kind === 'cleaning')
   if (cleaningLines.length === 0) {
-    return 'Für diese Anfrage gibt es keine Reinigungsposition. Antworte mit <code>übernehmen</code>, dann frage ich direkt den Steuersatz.'
+    return [
+      'Soll eine Reinigungsgebühr anfallen?',
+      'Falls ja, antworte mit einer Zahl wie <code>150</code>.',
+      'Falls nein, antworte mit <code>0</code> oder <code>übernehmen</code>.',
+    ].join('\n')
   }
 
   const cleaningSummary = cleaningLines.map(line => `${line.name}: ${formatMoney(line.unitPriceNet)}`).join(', ')
@@ -559,6 +564,8 @@ async function buildConversationStateFromAvailability(args: {
       }]
     : result.allocation.allocations
 
+  const selectedAvailabilityReply = createTelegramAvailabilityMessage(result, parsedRequest, allocations)
+
   const invoiceLines = buildInvoiceLinesFromAllocation({
     requestId: `tg-${Date.now()}`,
     locationName: result.location.name,
@@ -621,7 +628,7 @@ async function buildConversationStateFromAvailability(args: {
       customerId: matchedCustomer?.id,
       bookingStatus: 'bestaetigt' as const,
     },
-    reply: availabilityReply,
+    reply: selectedAvailabilityReply,
   }
 }
 
@@ -1027,7 +1034,7 @@ async function handleCleaningStep(chatId: number | string, state: TelegramConver
   }
 
   const hasCleaningLines = state.invoiceForm.lines.some(line => line.kind === 'cleaning')
-  if (hasCleaningLines && !isSkip(text)) {
+  if (!isSkip(text)) {
     const amount = parseNumberFromText(text)
     if (amount === null || amount < 0) {
       return {
@@ -1035,7 +1042,28 @@ async function handleCleaningStep(chatId: number | string, state: TelegramConver
         reply: buildCleaningPrompt(state.invoiceForm),
       }
     }
-    setAllLinePrices(state, 'cleaning', amount)
+
+    if (hasCleaningLines) {
+      setAllLinePrices(state, 'cleaning', amount)
+    } else if (amount > 0) {
+      state.invoiceForm.lines.push({
+        id: `draft-line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        kind: 'cleaning',
+        sourceKey: state.invoiceForm.lines.find(line => line.kind === 'booking')?.sourceKey,
+        propertyId: state.invoiceLines?.[0]?.propertyId,
+        requestId: state.invoiceLines?.[0]?.requestId,
+        positionNumber: state.invoiceLines?.[0]?.positionNumber,
+        name: `${state.invoiceLines?.[0]?.shortCode || state.invoiceLines?.[0]?.propertyName || 'Endreinigung'} - Endreinigung`,
+        description: state.invoiceLines?.[0]
+          ? `${state.invoiceLines[0].propertyName}, ${state.invoiceLines[0].locationName}, ${formatRange(state.invoiceLines[0].checkIn, state.invoiceLines[0].checkOut)}`
+          : 'Endreinigung',
+        quantity: 1,
+        unitName: 'Pauschale',
+        unitPriceNet: amount,
+        discountPercentage: 0,
+        taxRate: state.invoiceForm.lines.find(line => line.kind === 'booking')?.taxRate ?? 0,
+      })
+    }
   }
 
   state.stage = 'awaiting_tax_rate'
