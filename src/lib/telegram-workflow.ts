@@ -538,6 +538,15 @@ async function moveToNextRequiredStep(chatId: number | string, state: TelegramCo
     }
   }
 
+  if (state.requestContext?.requestedDiscountPercentage === undefined) {
+    state.stage = 'awaiting_discount'
+    await saveConversation(chatId, state)
+    return {
+      handled: true,
+      reply: 'Soll ein Rabatt berücksichtigt werden? Antworte mit einer Zahl wie <code>5</code> oder mit <code>nein</code>.',
+    }
+  }
+
   const hasCleaningLines = state.invoiceForm.lines.some(line => line.kind === 'cleaning')
   if (!hasCleaningLines && state.requestContext?.requestedCleaningFee === undefined) {
     state.stage = 'awaiting_cleaning'
@@ -545,6 +554,24 @@ async function moveToNextRequiredStep(chatId: number | string, state: TelegramCo
     return {
       handled: true,
       reply: buildCleaningPrompt(state.invoiceForm),
+    }
+  }
+
+  if (state.requestContext?.requestedTaxRate === undefined) {
+    state.stage = 'awaiting_tax_rate'
+    await saveConversation(chatId, state)
+    return {
+      handled: true,
+      reply: buildTaxRatePrompt(state.invoiceForm),
+    }
+  }
+
+  if (state.requestContext?.requestedPaymentTermDays === undefined) {
+    state.stage = 'awaiting_payment_term'
+    await saveConversation(chatId, state)
+    return {
+      handled: true,
+      reply: 'Welches Zahlungsziel soll gelten? Antworte z. B. mit <code>14</code> für 14 Tage.',
     }
   }
 
@@ -1177,6 +1204,10 @@ async function handleDiscountStep(chatId: number | string, state: TelegramConver
 
   if (isNo(text) || isSkip(text)) {
     state.invoiceForm.totalDiscountPercentage = 0
+    state.requestContext = {
+      ...state.requestContext,
+      requestedDiscountPercentage: 0,
+    }
   } else {
     const amount = parseNumberFromText(text)
     if (amount === null || amount < 0 || amount > 100) {
@@ -1186,15 +1217,12 @@ async function handleDiscountStep(chatId: number | string, state: TelegramConver
       }
     }
     state.invoiceForm.totalDiscountPercentage = amount
+    state.requestContext = {
+      ...state.requestContext,
+      requestedDiscountPercentage: amount,
+    }
   }
-
-  state.stage = 'awaiting_cleaning'
-  state.draftInvoice = undefined
-  await saveConversation(chatId, state)
-  return {
-    handled: true,
-    reply: buildCleaningPrompt(state.invoiceForm),
-  }
+  return moveToNextRequiredStep(chatId, state)
 }
 
 async function handleCleaningStep(chatId: number | string, state: TelegramConversationState, text: string): Promise<HandlerResult> {
@@ -1246,12 +1274,11 @@ async function handleTaxRateStep(chatId: number | string, state: TelegramConvers
   }
 
   setAllTaxRates(state, amount as 0 | 7 | 19)
-  state.stage = 'awaiting_payment_term'
-  await saveConversation(chatId, state)
-  return {
-    handled: true,
-    reply: 'Welches Zahlungsziel soll gelten? Antworte z. B. mit <code>14</code> für 14 Tage.',
+  state.requestContext = {
+    ...state.requestContext,
+    requestedTaxRate: amount as 0 | 7 | 19,
   }
+  return moveToNextRequiredStep(chatId, state)
 }
 
 async function handlePaymentTermStep(chatId: number | string, state: TelegramConversationState, text: string): Promise<HandlerResult> {
@@ -1268,6 +1295,10 @@ async function handlePaymentTermStep(chatId: number | string, state: TelegramCon
   }
 
   state.invoiceForm.paymentTermDays = Math.round(amount)
+  state.requestContext = {
+    ...state.requestContext,
+    requestedPaymentTermDays: Math.round(amount),
+  }
   state.stage = 'awaiting_draft_confirmation'
   state.draftInvoice = undefined
   const customer = state.customerId ? await getCustomerById(state.customerId) : null
