@@ -786,7 +786,7 @@ async function buildConversationStateFromAvailability(args: {
   }
 
   invoiceForm.customerName = invoiceForm.customerName || richParsed.billingCompanyName || richParsed.customerName || ''
-  invoiceForm.addressSupplement = invoiceForm.addressSupplement || richParsed.billingAddressSupplement || richParsed.contactName || ''
+  invoiceForm.addressSupplement = ''
   invoiceForm.street = invoiceForm.street || richParsed.billingStreet || ''
   invoiceForm.zip = invoiceForm.zip || richParsed.billingZip || ''
   invoiceForm.city = invoiceForm.city || richParsed.billingCity || ''
@@ -890,7 +890,7 @@ async function selectCustomer(state: TelegramConversationState, query: string) {
       state.invoiceForm = {
         ...invoiceForm,
         customerName: createdCustomer.companyName || invoiceForm.customerName,
-        addressSupplement: invoiceForm.addressSupplement || state.requestContext?.billingAddressSupplement || state.requestContext?.contactName || '',
+        addressSupplement: '',
         street: invoiceForm.street || state.requestContext?.billingStreet || '',
         zip: invoiceForm.zip || state.requestContext?.billingZip || '',
         city: invoiceForm.city || state.requestContext?.billingCity || '',
@@ -949,7 +949,7 @@ async function selectCustomer(state: TelegramConversationState, query: string) {
   state.invoiceForm = {
     ...invoiceForm,
     customerName: customer.companyName || invoiceForm.customerName,
-    addressSupplement: invoiceForm.addressSupplement || `${customer.firstName ?? ''} ${customer.lastName ?? ''}`.trim() || state.requestContext?.billingAddressSupplement || state.requestContext?.contactName || '',
+    addressSupplement: '',
     street: invoiceForm.street || customer.address || state.requestContext?.billingStreet || '',
     zip: invoiceForm.zip || customer.zip || state.requestContext?.billingZip || '',
     city: invoiceForm.city || customer.city || state.requestContext?.billingCity || '',
@@ -1094,7 +1094,7 @@ async function handleCreateDecision(chatId: number | string, state: TelegramConv
       state.invoiceForm = {
         ...invoiceForm,
         customerName: createdCustomer.companyName || invoiceForm.customerName,
-        addressSupplement: invoiceForm.addressSupplement || state.requestContext?.billingAddressSupplement || state.requestContext?.contactName || '',
+        addressSupplement: '',
         street: invoiceForm.street || state.requestContext?.billingStreet || '',
         zip: invoiceForm.zip || state.requestContext?.billingZip || '',
         city: invoiceForm.city || state.requestContext?.billingCity || '',
