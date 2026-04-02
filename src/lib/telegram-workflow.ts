@@ -413,6 +413,21 @@ function formatInvoiceFormSummary(state: TelegramConversationState, customer?: C
   }
 
   const totals = calculateInvoiceFormTotals(invoiceForm.lines, invoiceForm.totalDiscountPercentage)
+  const bookingLines = invoiceForm.lines.filter(line => line.kind === 'booking')
+  const cleaningLines = invoiceForm.lines.filter(line => line.kind === 'cleaning')
+  const priceSummary = bookingLines
+    .map(line => {
+      const bedsAllocated =
+        state.invoiceLines?.find(invoiceLine => line.sourceKey === `${invoiceLine.requestId}:${invoiceLine.propertyId}`)?.bedsAllocated ??
+        Number(line.description.match(/,\s*(\d+)\s+Betten?$/)?.[1] ?? '1')
+      const pricePerBedNight = bedsAllocated > 0 ? line.unitPriceNet / bedsAllocated : line.unitPriceNet
+      return `${line.name}: ${formatMoney(pricePerBedNight)} pro Bett/Nacht`
+    })
+    .join(', ')
+  const cleaningSummary = cleaningLines.length > 0
+    ? cleaningLines.map(line => `${line.name}: ${formatMoney(line.unitPriceNet)}`).join(', ')
+    : 'keine'
+  const taxRates = Array.from(new Set(invoiceForm.lines.filter(line => line.kind !== 'text').map(line => line.taxRate)))
   const linePreview = invoiceForm.lines
     .filter(line => line.kind !== 'text')
     .map(line => `- ${line.name}: ${line.quantity} ${line.unitName} × ${formatMoney(line.unitPriceNet)} · ${line.taxRate}%`)
@@ -425,8 +440,12 @@ function formatInvoiceFormSummary(state: TelegramConversationState, customer?: C
     `<b>Zeitraum:</b> ${request.checkIn} bis ${request.checkOut}`,
     `<b>Betten:</b> ${request.bedsNeeded}`,
     `<b>Auftraggeber:</b> ${customer?.companyName ?? 'noch nicht gesetzt'}`,
+    `<b>Preis:</b> ${priceSummary || 'nicht gesetzt'}`,
+    `<b>Reinigung:</b> ${cleaningSummary}`,
+    `<b>Steuersatz:</b> ${taxRates.join(', ') || 0}%`,
     `<b>Zahlungsziel:</b> ${invoiceForm.paymentTermDays} Tage`,
     `<b>Rabatt:</b> ${invoiceForm.totalDiscountPercentage || 0}%`,
+    `<b>Rechnungsadresse:</b> ${[invoiceForm.street, invoiceForm.zip, invoiceForm.city, invoiceForm.countryCode].filter(Boolean).join(', ') || 'nicht gesetzt'}`,
     '',
     '<b>Positionen</b>',
     ...linePreview,
