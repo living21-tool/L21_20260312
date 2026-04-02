@@ -173,6 +173,32 @@ export async function updateCustomerServer(customerId: string, data: Partial<Cus
   return mapCustomer(updated)
 }
 
+export async function addCustomerServer(input: Omit<Customer, 'id' | 'createdAt'>): Promise<Customer> {
+  const id = `cust-${Date.now()}`
+  const now = new Date().toISOString().slice(0, 10)
+
+  const row = {
+    id,
+    company_name: input.companyName,
+    first_name: input.firstName,
+    last_name: input.lastName,
+    email: input.email,
+    phone: input.phone,
+    address: input.address,
+    zip: input.zip,
+    city: input.city,
+    country: input.country,
+    tax_id: input.taxId ?? '',
+    lexoffice_contact_id: input.lexofficeContactId ?? '',
+    notes: input.notes,
+    created_at: now,
+  }
+
+  const { data, error } = await supabaseAdmin.from('customers').insert(row).select('*').single()
+  if (error) throw new Error(`Auftraggeber konnte nicht erstellt werden: ${error.message}`)
+  return mapCustomer(data)
+}
+
 export async function addBookingServer(input: BookingInsertInput): Promise<Booking> {
   const now = new Date().toISOString().slice(0, 10)
   const year = new Date().getFullYear()

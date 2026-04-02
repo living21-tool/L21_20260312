@@ -5,6 +5,7 @@ import { parseAvailabilityMessage } from '@/lib/availability-message-parser'
 import { parseBookingRequest } from '@/lib/booking-request-parser'
 import { createTelegramAvailabilityMessage } from '@/lib/availability-response'
 import {
+  addCustomerServer,
   addBookingServer,
   findCustomersByQuery,
   getCustomerById,
@@ -65,6 +66,8 @@ type TelegramPropertyChoice = {
 type TelegramRequestContext = {
   matchedCustomerId?: string
   matchedCustomerName?: string
+  customerName?: string
+  billingCompanyName?: string
   contactName?: string
   email?: string
   phone?: string
@@ -230,6 +233,43 @@ function buildPropertyChoiceReply(choices: TelegramPropertyChoice[]) {
     '',
     'Antworte mit der Nummer, z. B. <code>1</code>.',
   ].join('\n')
+}
+
+async function createCustomerFromRequestContext(
+  state: TelegramConversationState,
+  explicitCompanyName?: string,
+) {
+  const companyName =
+    explicitCompanyName?.trim() ||
+    state.requestContext?.billingCompanyName?.trim() ||
+    state.requestContext?.customerName?.trim()
+
+  if (!companyName) {
+    return null
+  }
+
+  const contactNameParts = state.requestContext?.contactName?.trim().split(/\s+/).filter(Boolean) ?? []
+  const firstName = contactNameParts.length > 1 ? contactNameParts.slice(0, -1).join(' ') : ''
+  const lastName = contactNameParts.at(-1) || ''
+
+  return addCustomerServer({
+    companyName,
+    firstName,
+    lastName,
+    email: state.requestContext?.email ?? '',
+    phone: state.requestContext?.phone ?? '',
+    address: state.requestContext?.billingStreet ?? '',
+    zip: state.requestContext?.billingZip ?? '',
+    city: state.requestContext?.billingCity ?? '',
+    country: state.requestContext?.billingCountry ?? 'Deutschland',
+    taxId: state.requestContext?.billingTaxId ?? '',
+    lexofficeContactId: '',
+    notes: [
+      state.requestContext?.project ? `Projekt: ${state.requestContext.project}` : '',
+      state.requestContext?.reference ? `Referenz: ${state.requestContext.reference}` : '',
+      state.request?.originalText ? `Bot-Freitextanfrage:\n${state.request.originalText}` : '',
+    ].filter(Boolean).join('\n'),
+  })
 }
 
 function buildHelpMessage() {
@@ -463,6 +503,8 @@ async function buildConversationStateFromAvailability(args: {
         requestContext: {
           matchedCustomerId: richParsed.matchedCustomerId,
           matchedCustomerName: richParsed.matchedCustomerName,
+          customerName: richParsed.customerName,
+          billingCompanyName: richParsed.billingCompanyName,
           contactName: richParsed.contactName,
           email: richParsed.email,
           phone: richParsed.phone,
@@ -546,6 +588,8 @@ async function buildConversationStateFromAvailability(args: {
       requestContext: {
         matchedCustomerId: richParsed.matchedCustomerId,
         matchedCustomerName: richParsed.matchedCustomerName,
+        customerName: richParsed.customerName,
+        billingCompanyName: richParsed.billingCompanyName,
         contactName: richParsed.contactName,
         email: richParsed.email,
         phone: richParsed.phone,
@@ -598,6 +642,49 @@ async function handleAvailabilityStart(chatId: number | string, text: string): P
 async function selectCustomer(state: TelegramConversationState, query: string) {
   const matches = await findCustomersByQuery(query, 5)
   if (matches.length === 0) {
+    const createdCustomer = await createCustomerFromRequestContext(state, query)
+    if (createdCustomer && state.invoiceLines) {
+      const invoiceForm = createInitialInvoiceForm({
+        customer: createdCustomer,
+        invoiceLines: state.invoiceLines,
+        notes: state.request?.originalText ?? '',
+        defaultTaxRate: state.invoiceForm?.lines.find(line => line.kind !== 'text')?.taxRate ?? 0,
+        totalDiscountPercentage: state.invoiceForm?.totalDiscountPercentage ?? 0,
+        fallbackCountryCode: inferCountryCodeFromValue(state.requestContext?.billingCountry || createdCustomer.country),
+      })
+
+      if (state.invoiceForm) {
+        invoiceForm.lines = state.invoiceForm.lines
+        invoiceForm.paymentTermDays = state.invoiceForm.paymentTermDays
+        invoiceForm.totalDiscountPercentage = state.invoiceForm.totalDiscountPercentage
+        invoiceForm.title = state.invoiceForm.title
+        invoiceForm.introduction = createdCustomer.companyName ? `Rechnung für ${createdCustomer.companyName}` : state.invoiceForm.introduction
+        invoiceForm.remark = state.invoiceForm.remark
+      }
+
+      state.customerId = createdCustomer.id
+      state.invoiceForm = {
+        ...invoiceForm,
+        customerName: createdCustomer.companyName || invoiceForm.customerName,
+        addressSupplement: invoiceForm.addressSupplement || state.requestContext?.billingAddressSupplement || state.requestContext?.contactName || '',
+        street: invoiceForm.street || state.requestContext?.billingStreet || '',
+        zip: invoiceForm.zip || state.requestContext?.billingZip || '',
+        city: invoiceForm.city || state.requestContext?.billingCity || '',
+        countryCode: invoiceForm.countryCode || inferCountryCodeFromValue(state.requestContext?.billingCountry || createdCustomer.country),
+      }
+      state.stage = 'awaiting_price'
+      state.draftInvoice = undefined
+
+      return {
+        state,
+        reply: [
+          `Auftraggeber neu angelegt: <b>${createdCustomer.companyName}</b>`,
+          '',
+          buildBookingPricePrompt(state.invoiceForm),
+        ].join('\n'),
+      }
+    }
+
     return {
       state,
       reply: 'Ich habe keinen passenden Auftraggeber gefunden. Wie heißt der Auftraggeber genau?',
@@ -766,6 +853,48 @@ async function handleCreateDecision(chatId: number | string, state: TelegramConv
           `Auftraggeber erkannt: <b>${state.invoiceForm?.customerName ?? state.requestContext?.matchedCustomerName ?? 'Auftraggeber'}</b>`,
           '',
           buildBookingPricePrompt(state.invoiceForm!),
+        ].join('\n'),
+      }
+    }
+
+    const createdCustomer = await createCustomerFromRequestContext(state)
+    if (createdCustomer && state.invoiceLines) {
+      const invoiceForm = createInitialInvoiceForm({
+        customer: createdCustomer,
+        invoiceLines: state.invoiceLines,
+        notes: state.request?.originalText ?? '',
+        defaultTaxRate: state.invoiceForm?.lines.find(line => line.kind !== 'text')?.taxRate ?? 0,
+        totalDiscountPercentage: state.invoiceForm?.totalDiscountPercentage ?? 0,
+        fallbackCountryCode: inferCountryCodeFromValue(state.requestContext?.billingCountry || createdCustomer.country),
+      })
+
+      if (state.invoiceForm) {
+        invoiceForm.lines = state.invoiceForm.lines
+        invoiceForm.paymentTermDays = state.invoiceForm.paymentTermDays
+        invoiceForm.totalDiscountPercentage = state.invoiceForm.totalDiscountPercentage
+        invoiceForm.title = state.invoiceForm.title
+        invoiceForm.introduction = createdCustomer.companyName ? `Rechnung für ${createdCustomer.companyName}` : state.invoiceForm.introduction
+        invoiceForm.remark = state.invoiceForm.remark
+      }
+
+      state.customerId = createdCustomer.id
+      state.invoiceForm = {
+        ...invoiceForm,
+        customerName: createdCustomer.companyName || invoiceForm.customerName,
+        addressSupplement: invoiceForm.addressSupplement || state.requestContext?.billingAddressSupplement || state.requestContext?.contactName || '',
+        street: invoiceForm.street || state.requestContext?.billingStreet || '',
+        zip: invoiceForm.zip || state.requestContext?.billingZip || '',
+        city: invoiceForm.city || state.requestContext?.billingCity || '',
+        countryCode: invoiceForm.countryCode || inferCountryCodeFromValue(state.requestContext?.billingCountry || createdCustomer.country),
+      }
+      state.stage = 'awaiting_price'
+      await saveConversation(chatId, state)
+      return {
+        handled: true,
+        reply: [
+          `Auftraggeber neu angelegt: <b>${createdCustomer.companyName}</b>`,
+          '',
+          buildBookingPricePrompt(state.invoiceForm),
         ].join('\n'),
       }
     }
