@@ -51,6 +51,41 @@ export default function KalenderPage() {
   const today = new Date()
   const todayOffset = differenceInDays(today, startDate)
   const todayVisible = todayOffset >= 0 && todayOffset < DAYS_TO_SHOW
+  const rangeEnd = useMemo(() => addDays(startDate, DAYS_TO_SHOW), [startDate])
+  const propertiesByLocationId = useMemo(() => {
+    const map = new Map<string, typeof allProperties>()
+    for (const property of allProperties) {
+      const list = map.get(property.locationId) ?? []
+      list.push(property)
+      map.set(property.locationId, list)
+    }
+    return map
+  }, [allProperties])
+  const visibleBookingsByPropertyId = useMemo(() => {
+    const map = new Map<string, Booking[]>()
+    for (const booking of allBookings) {
+      if (booking.status === 'storniert') continue
+      if (booking.source === 'lexoffice_sonstige') continue
+      const checkIn = parseISO(booking.checkIn)
+      const checkOut = parseISO(booking.checkOut)
+      if (!(checkIn < rangeEnd && checkOut > startDate)) continue
+      const list = map.get(booking.propertyId) ?? []
+      list.push(booking)
+      map.set(booking.propertyId, list)
+    }
+    return map
+  }, [allBookings, rangeEnd, startDate])
+  const activeBookingCountByLocationId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const [locationId, properties] of propertiesByLocationId) {
+      let count = 0
+      for (const property of properties) {
+        count += visibleBookingsByPropertyId.get(property.id)?.length ?? 0
+      }
+      counts.set(locationId, count)
+    }
+    return counts
+  }, [propertiesByLocationId, visibleBookingsByPropertyId])
 
   const toggleLoc = (id: string) =>
     setCollapsedLocs(prev => {
@@ -69,21 +104,13 @@ export default function KalenderPage() {
     return locs
       .map(loc => ({
         loc,
-        props: allProperties.filter(p => p.locationId === loc.id && p.active),
+        props: (propertiesByLocationId.get(loc.id) ?? []).filter(p => p.active),
       }))
       .filter(g => g.props.length > 0)
-  }, [allLocations, allProperties, filterLocation])
+  }, [allLocations, filterLocation, propertiesByLocationId])
 
   function getBookingsForProperty(propertyId: string) {
-    return allBookings.filter(b => {
-      if (b.propertyId !== propertyId) return false
-      if (b.status === 'storniert') return false
-      if (b.source === 'lexoffice_sonstige') return false  // Sonstige: kein Objekt/Zeitraum
-      const checkIn = parseISO(b.checkIn)
-      const checkOut = parseISO(b.checkOut)
-      const rangeEnd = addDays(startDate, DAYS_TO_SHOW)
-      return checkIn < rangeEnd && checkOut > startDate
-    })
+    return visibleBookingsByPropertyId.get(propertyId) ?? []
   }
 
   function getBookingStyle(booking: Booking) {
@@ -209,9 +236,7 @@ export default function KalenderPage() {
         {/* Grouped property rows */}
         {groups.map(({ loc, props }) => {
           const collapsed = collapsedLocs.has(loc.id)
-          const locBookingsCount = allBookings.filter(
-            b => props.some(p => p.id === b.propertyId) && b.status !== 'storniert'
-          ).length
+          const locBookingsCount = activeBookingCountByLocationId.get(loc.id) ?? 0
           const locationRowBackground = mixColorWithWhite(loc.color, 0.12)
 
           return (

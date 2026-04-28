@@ -1,0 +1,25 @@
+
+> buchungssystem@0.1.0 dev
+> next dev --webpack --port 3001
+
+▲ Next.js 16.1.6 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.112:3001
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 2.3s
+○ Compiling /import ...
+ GET /import 200 in 5.1s (compile: 4.4s, render: 637ms)
+○ Compiling /buchungen ...
+ GET /buchungen 200 in 5.4s (compile: 5.1s, render: 317ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1531ms (compile: 1093ms, render: 438ms)
+ GET /import 200 in 905ms (compile: 148ms, render: 756ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1083ms (compile: 5ms, render: 1078ms)
+ GET /import 200 in 165ms (compile: 24ms, render: 141ms)
+ GET /import 200 in 29ms (compile: 5ms, render: 24ms)
+ GET /import 200 in 24ms (compile: 6ms, render: 17ms)
+ GET /import 200 in 25ms (compile: 6ms, render: 19ms)
+ GET /import 200 in 22ms (compile: 6ms, render: 15ms)
+ GET /import 200 in 25ms (compile: 5ms, render: 20ms)
+ GET /import 200 in 40ms (compile: 8ms, render: 31ms)

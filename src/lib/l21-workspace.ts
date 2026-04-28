@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { EmployeeProfile, L21Conversation, L21Message, L21Task, L21TaskComment, L21TaskStatus } from './l21-types'
 import { useAuthProfile } from './auth-client'
@@ -96,9 +96,14 @@ export function useL21Workspace() {
   const [taskComments, setTaskComments] = useState<L21TaskComment[]>([])
   const [conversations, setConversations] = useState<L21Conversation[]>([])
   const [messages, setMessages] = useState<L21Message[]>([])
+  const loadPromiseRef = useRef<Promise<void> | null>(null)
+  const reloadQueuedRef = useRef(false)
+  const reloadTimerRef = useRef<number | null>(null)
 
   const loadWorkspace = useCallback(async () => {
-    if (!auth.profile) {
+    const currentProfile = auth.profile
+
+    if (!currentProfile) {
       setProfiles([])
       setTasks([])
       setTaskComments([])
@@ -108,49 +113,68 @@ export function useL21Workspace() {
       return
     }
 
-    setLoading(true)
-
-    const [{ data: profilesData }, { data: tasksData }, { data: memberRows }] = await Promise.all([
-      supabase.from('profiles').select('*').order('full_name'),
-      auth.isAdmin
-        ? supabase.from('tasks').select('*').order('created_at', { ascending: false })
-        : supabase.from('tasks').select('*').eq('assignee_id', auth.profile.id).order('created_at', { ascending: false }),
-      auth.isAdmin
-        ? supabase.from('conversation_members').select('conversation_id, profile_id')
-        : supabase.from('conversation_members').select('conversation_id, profile_id').eq('profile_id', auth.profile.id),
-    ])
-
-    const conversationIds = Array.from(new Set((memberRows ?? []).map(row => row.conversation_id as string)))
-    const taskIds = Array.from(new Set((tasksData ?? []).map(row => row.id as string)))
-    const [conversationsResult, allConversationMembers, messagesResult, taskCommentsResult] = await Promise.all([
-      conversationIds.length > 0
-        ? supabase.from('conversations').select('*').in('id', conversationIds).order('updated_at', { ascending: false })
-        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
-      conversationIds.length > 0
-        ? supabase.from('conversation_members').select('conversation_id, profile_id').in('conversation_id', conversationIds)
-        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
-      conversationIds.length > 0
-        ? supabase.from('messages').select('*').in('conversation_id', conversationIds).order('created_at')
-        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
-      taskIds.length > 0
-        ? supabase.from('task_comments').select('*').in('task_id', taskIds).order('created_at')
-        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
-    ])
-
-    const participantMap = new Map<string, string[]>()
-    for (const row of allConversationMembers.data ?? []) {
-      const conversationId = row.conversation_id as string
-      const list = participantMap.get(conversationId) ?? []
-      list.push(row.profile_id as string)
-      participantMap.set(conversationId, list)
+    if (loadPromiseRef.current) {
+      reloadQueuedRef.current = true
+      await loadPromiseRef.current
+      return
     }
 
-    setProfiles((profilesData ?? []).map(mapProfile))
-    setTasks((tasksData ?? []).map(mapTask))
-    setTaskComments((taskCommentsResult.data ?? []).map(mapTaskComment))
-    setConversations(sortConversationsByUpdatedAt((conversationsResult.data ?? []).map(row => mapConversation(row, participantMap.get(row.id as string) ?? []))))
-    setMessages((messagesResult.data ?? []).map(mapMessage))
-    setLoading(false)
+    setLoading(true)
+
+    loadPromiseRef.current = (async () => {
+      const [{ data: profilesData }, { data: tasksData }, { data: memberRows }] = await Promise.all([
+        supabase.from('profiles').select('*').order('full_name'),
+        auth.isAdmin
+          ? supabase.from('tasks').select('*').order('created_at', { ascending: false })
+          : supabase.from('tasks').select('*').eq('assignee_id', currentProfile.id).order('created_at', { ascending: false }),
+        auth.isAdmin
+          ? supabase.from('conversation_members').select('conversation_id, profile_id')
+          : supabase.from('conversation_members').select('conversation_id, profile_id').eq('profile_id', currentProfile.id),
+      ])
+
+      const conversationIds = Array.from(new Set((memberRows ?? []).map(row => row.conversation_id as string)))
+      const taskIds = Array.from(new Set((tasksData ?? []).map(row => row.id as string)))
+      const [conversationsResult, allConversationMembers, messagesResult, taskCommentsResult] = await Promise.all([
+        conversationIds.length > 0
+          ? supabase.from('conversations').select('*').in('id', conversationIds).order('updated_at', { ascending: false })
+          : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+        conversationIds.length > 0
+          ? supabase.from('conversation_members').select('conversation_id, profile_id').in('conversation_id', conversationIds)
+          : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+        conversationIds.length > 0
+          ? supabase.from('messages').select('*').in('conversation_id', conversationIds).order('created_at')
+          : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+        taskIds.length > 0
+          ? supabase.from('task_comments').select('*').in('task_id', taskIds).order('created_at')
+          : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+      ])
+
+      const participantMap = new Map<string, string[]>()
+      for (const row of allConversationMembers.data ?? []) {
+        const conversationId = row.conversation_id as string
+        const list = participantMap.get(conversationId) ?? []
+        list.push(row.profile_id as string)
+        participantMap.set(conversationId, list)
+      }
+
+      setProfiles((profilesData ?? []).map(mapProfile))
+      setTasks((tasksData ?? []).map(mapTask))
+      setTaskComments((taskCommentsResult.data ?? []).map(mapTaskComment))
+      setConversations(sortConversationsByUpdatedAt((conversationsResult.data ?? []).map(row => mapConversation(row, participantMap.get(row.id as string) ?? []))))
+      setMessages((messagesResult.data ?? []).map(mapMessage))
+    })()
+
+    try {
+      await loadPromiseRef.current
+    } finally {
+      loadPromiseRef.current = null
+      setLoading(false)
+
+      if (reloadQueuedRef.current) {
+        reloadQueuedRef.current = false
+        void loadWorkspace()
+      }
+    }
   }, [auth.isAdmin, auth.profile])
 
   useEffect(() => {
@@ -166,20 +190,31 @@ export function useL21Workspace() {
       return
     }
 
-    const reload = () => {
-      void loadWorkspace()
+    const scheduleReload = () => {
+      if (reloadTimerRef.current !== null) {
+        window.clearTimeout(reloadTimerRef.current)
+      }
+
+      reloadTimerRef.current = window.setTimeout(() => {
+        reloadTimerRef.current = null
+        void loadWorkspace()
+      }, 150)
     }
 
     const channel = supabase
       .channel(`l21-workspace-${auth.profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, reload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, reload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, reload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_members' }, reload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_members' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, scheduleReload)
       .subscribe()
 
     return () => {
+      if (reloadTimerRef.current !== null) {
+        window.clearTimeout(reloadTimerRef.current)
+        reloadTimerRef.current = null
+      }
       void supabase.removeChannel(channel)
     }
   }, [auth.profile, loadWorkspace])
@@ -428,10 +463,32 @@ export function useL21Workspace() {
     },
     [auth.profile, conversations],
   )
+  const messagesByConversationId = useMemo(() => {
+    const map = new Map<string, L21Message[]>()
+    for (const message of messages) {
+      const list = map.get(message.conversationId) ?? []
+      list.push(message)
+      map.set(message.conversationId, list)
+    }
+    return map
+  }, [messages])
+  const taskCommentsByTaskId = useMemo(() => {
+    const map = new Map<string, L21TaskComment[]>()
+    for (const comment of taskComments) {
+      const list = map.get(comment.taskId) ?? []
+      list.push(comment)
+      map.set(comment.taskId, list)
+    }
+    return map
+  }, [taskComments])
+  const profilesById = useMemo(
+    () => new Map(profiles.map(profile => [profile.id, profile])),
+    [profiles],
+  )
 
   const getMessages = useCallback(
-    (conversationId: string) => messages.filter(message => message.conversationId === conversationId),
-    [messages],
+    (conversationId: string) => messagesByConversationId.get(conversationId) ?? [],
+    [messagesByConversationId],
   )
 
   const getTaskByConversation = useCallback(
@@ -440,13 +497,13 @@ export function useL21Workspace() {
   )
 
   const getTaskComments = useCallback(
-    (taskId: string) => taskComments.filter(comment => comment.taskId === taskId),
-    [taskComments],
+    (taskId: string) => taskCommentsByTaskId.get(taskId) ?? [],
+    [taskCommentsByTaskId],
   )
 
   const getProfile = useCallback(
-    (profileId: string) => profiles.find(profile => profile.id === profileId),
-    [profiles],
+    (profileId: string) => profilesById.get(profileId),
+    [profilesById],
   )
 
   return {

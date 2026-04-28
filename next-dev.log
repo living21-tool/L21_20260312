@@ -1,422 +1,59 @@
 
 > buchungssystem@0.1.0 dev
-> next dev
+> next dev --webpack
 
-▲ Next.js 16.1.6 (Turbopack)
+▲ Next.js 16.1.6 (webpack)
 - Local:         http://localhost:3000
-- Network:       http://192.168.1.111:3000
+- Network:       http://192.168.1.112:3000
 - Environments: .env.local
 
 ✓ Starting...
-Creating turbopack project { dir: 'C:\\L21_API\\buchungssystem', testMode: true }
-✓ Ready in 798ms
- GET / 200 in 691ms (compile: 371ms, render: 320ms)
- GET / 200 in 47ms (compile: 6ms, render: 41ms)
- GET /mein-l21 200 in 63ms (compile: 36ms, render: 27ms)
- GET /aufgaben 200 in 50ms (compile: 33ms, render: 17ms)
- GET /mein-l21 200 in 22ms (compile: 4ms, render: 18ms)
- GET /mein-l21 404 in 894ms (compile: 609ms, render: 285ms)
- GET /mein-l21 404 in 246ms (compile: 12ms, render: 234ms)
- GET /mein-l21 404 in 55ms (compile: 8ms, render: 47ms)
- GET /mein-l21 404 in 114ms (compile: 12ms, render: 102ms)
- GET /mein-l21 404 in 235ms (compile: 7ms, render: 228ms)
- GET /aufgaben 200 in 90ms (compile: 52ms, render: 38ms)
- GET /mitarbeiter 200 in 63ms (compile: 38ms, render: 25ms)
- GET /mitarbeiter 200 in 184ms (compile: 72ms, render: 111ms)
- GET /mitarbeiter 200 in 102ms (compile: 5ms, render: 98ms)
- GET /mitarbeiter 200 in 106ms (compile: 6ms, render: 101ms)
- GET /mitarbeiter 200 in 104ms (compile: 4ms, render: 99ms)
- GET /mitarbeiter 200 in 111ms (compile: 3ms, render: 107ms)
- GET /mitarbeiter 200 in 128ms (compile: 4ms, render: 124ms)
- GET /mitarbeiter 200 in 108ms (compile: 4ms, render: 105ms)
- GET /mitarbeiter 200 in 138ms (compile: 4ms, render: 134ms)
- GET /mitarbeiter 200 in 125ms (compile: 4ms, render: 121ms)
- GET /mitarbeiter 200 in 115ms (compile: 7ms, render: 108ms)
- GET /mitarbeiter 200 in 118ms (compile: 3ms, render: 115ms)
- GET /mitarbeiter 200 in 93ms (compile: 3ms, render: 90ms)
- GET /mitarbeiter 200 in 135ms (compile: 3ms, render: 131ms)
- GET /mitarbeiter 200 in 141ms (compile: 5ms, render: 136ms)
- GET /mitarbeiter 200 in 132ms (compile: 3ms, render: 129ms)
- GET /mitarbeiter 200 in 138ms (compile: 4ms, render: 134ms)
- GET /mitarbeiter 200 in 122ms (compile: 4ms, render: 118ms)
- GET /mitarbeiter 200 in 131ms (compile: 4ms, render: 127ms)
- GET /mitarbeiter 200 in 123ms (compile: 3ms, render: 120ms)
- GET /mitarbeiter 200 in 114ms (compile: 3ms, render: 111ms)
- GET /mitarbeiter 200 in 90ms (compile: 4ms, render: 86ms)
- GET /mitarbeiter 200 in 117ms (compile: 3ms, render: 114ms)
- GET /mitarbeiter 200 in 126ms (compile: 3ms, render: 124ms)
- GET /mitarbeiter 200 in 122ms (compile: 4ms, render: 118ms)
- GET /mitarbeiter 200 in 107ms (compile: 5ms, render: 103ms)
- GET /mitarbeiter 200 in 108ms (compile: 6ms, render: 102ms)
- GET /mitarbeiter 200 in 112ms (compile: 6ms, render: 106ms)
- GET /mitarbeiter 200 in 122ms (compile: 3ms, render: 118ms)
- GET /mitarbeiter 200 in 133ms (compile: 7ms, render: 126ms)
- GET /mitarbeiter 200 in 142ms (compile: 5ms, render: 137ms)
- GET /mitarbeiter 200 in 142ms (compile: 4ms, render: 138ms)
- GET /mitarbeiter 200 in 111ms (compile: 7ms, render: 104ms)
- GET /mitarbeiter 200 in 146ms (compile: 8ms, render: 137ms)
- GET /mitarbeiter 200 in 134ms (compile: 4ms, render: 130ms)
- GET /mitarbeiter 200 in 139ms (compile: 5ms, render: 135ms)
- GET /mitarbeiter 200 in 137ms (compile: 4ms, render: 134ms)
- GET /mitarbeiter 200 in 132ms (compile: 8ms, render: 125ms)
- GET /mitarbeiter 200 in 96ms (compile: 10ms, render: 86ms)
- GET /mitarbeiter 200 in 87ms (compile: 9ms, render: 78ms)
- GET /mitarbeiter 200 in 112ms (compile: 3ms, render: 109ms)
- GET /mitarbeiter 200 in 113ms (compile: 4ms, render: 109ms)
- GET /mitarbeiter 200 in 122ms (compile: 8ms, render: 115ms)
- GET /mitarbeiter 200 in 120ms (compile: 4ms, render: 115ms)
- GET /mitarbeiter 200 in 97ms (compile: 3ms, render: 94ms)
- GET /mitarbeiter 200 in 93ms (compile: 3ms, render: 89ms)
- GET /mitarbeiter 200 in 121ms (compile: 3ms, render: 117ms)
- GET /mitarbeiter 200 in 123ms (compile: 5ms, render: 118ms)
- GET /mitarbeiter 200 in 98ms (compile: 6ms, render: 91ms)
- GET /mitarbeiter 200 in 66ms (compile: 6ms, render: 60ms)
- GET /mitarbeiter 200 in 37ms (compile: 6ms, render: 32ms)
-✓ Compiled in 109ms
-⨯ ./src/app/mein-l21/page.tsx:211:1
-Parsing ecmascript source code failed
-[0m [90m 209 |[39m     )
- [90m 210 |[39m   }
-[31m[1m>[22m[39m[90m 211 |[39m
- [90m     |[39m [31m[1m^[22m[39m[0m
-
-Expected '}', got '<eof>'
-
-
- GET /mein-l21 500 in 528ms (compile: 350ms, render: 178ms)
-⨯ ./src/app/mein-l21/page.tsx:211:1
-Parsing ecmascript source code failed
-[0m [90m 209 |[39m     )
- [90m 210 |[39m   }
-[31m[1m>[22m[39m[90m 211 |[39m
- [90m     |[39m [31m[1m^[22m[39m[0m
-
-Expected '}', got '<eof>'
-
-
- GET /mein-l21 500 in 26ms (compile: 14ms, render: 12ms)
- GET /mitarbeiter 200 in 181ms (compile: 7ms, render: 174ms)
-✓ Compiled in 89ms
-✓ Compiled in 89ms
- GET /mitarbeiter 200 in 31ms (compile: 4ms, render: 28ms)
-✓ Compiled in 226ms
- GET /mein-l21 200 in 225ms (compile: 172ms, render: 52ms)
- GET /aufgaben 200 in 33ms (compile: 16ms, render: 17ms)
- GET /mein-l21 200 in 17ms (compile: 3ms, render: 13ms)
-✓ Compiled in 207ms
- GET /mein-l21 200 in 40ms (compile: 3ms, render: 37ms)
-✓ Compiled in 60ms
-✓ Compiled in 69ms
-✓ Compiled in 78ms
-✓ Compiled in 145ms
-✓ Compiled in 65ms
-✓ Compiled in 72ms
- GET /mitarbeiter 200 in 96ms (compile: 72ms, render: 24ms)
- GET /mein-l21 200 in 81ms (compile: 57ms, render: 24ms)
- GET /mein-l21 200 in 218ms (compile: 89ms, render: 130ms)
- GET /mein-l21 200 in 134ms (compile: 7ms, render: 128ms)
- GET /mein-l21 200 in 147ms (compile: 2ms, render: 145ms)
- GET /mein-l21 200 in 163ms (compile: 13ms, render: 149ms)
- GET /mein-l21 200 in 107ms (compile: 6ms, render: 101ms)
- GET /mein-l21 200 in 116ms (compile: 5ms, render: 110ms)
- GET /mein-l21 200 in 113ms (compile: 3ms, render: 110ms)
- GET /mein-l21 200 in 86ms (compile: 14ms, render: 72ms)
- GET /mein-l21 200 in 78ms (compile: 4ms, render: 74ms)
- GET /mein-l21 200 in 75ms (compile: 4ms, render: 71ms)
- GET /mein-l21 200 in 80ms (compile: 11ms, render: 69ms)
- GET /mein-l21 200 in 69ms (compile: 4ms, render: 65ms)
- GET /mein-l21 200 in 85ms (compile: 4ms, render: 81ms)
- GET /mein-l21 200 in 79ms (compile: 3ms, render: 76ms)
- GET /mein-l21 200 in 80ms (compile: 3ms, render: 77ms)
- GET /mein-l21 200 in 80ms (compile: 6ms, render: 74ms)
- GET /mein-l21 200 in 79ms (compile: 3ms, render: 76ms)
- GET /mein-l21 200 in 76ms (compile: 3ms, render: 73ms)
- GET /mein-l21 200 in 80ms (compile: 3ms, render: 77ms)
- GET /mein-l21 200 in 79ms (compile: 3ms, render: 76ms)
- GET /mein-l21 200 in 90ms (compile: 4ms, render: 86ms)
- GET /mein-l21 200 in 89ms (compile: 3ms, render: 86ms)
- GET /mein-l21 200 in 90ms (compile: 4ms, render: 86ms)
- GET /mein-l21 200 in 93ms (compile: 3ms, render: 91ms)
- GET /mein-l21 200 in 86ms (compile: 3ms, render: 83ms)
- GET /mein-l21 200 in 99ms (compile: 3ms, render: 95ms)
- GET /mein-l21 200 in 104ms (compile: 3ms, render: 100ms)
- GET /mein-l21 200 in 106ms (compile: 2ms, render: 104ms)
- GET /mein-l21 200 in 98ms (compile: 9ms, render: 90ms)
- GET /mein-l21 200 in 85ms (compile: 7ms, render: 78ms)
- GET /mein-l21 200 in 76ms (compile: 3ms, render: 73ms)
- GET /mein-l21 200 in 74ms (compile: 4ms, render: 70ms)
- GET /mein-l21 200 in 76ms (compile: 3ms, render: 72ms)
- GET /mein-l21 200 in 72ms (compile: 4ms, render: 68ms)
- GET /mein-l21 200 in 70ms (compile: 2ms, render: 68ms)
- GET /mein-l21 200 in 53ms (compile: 2ms, render: 51ms)
- GET /mein-l21 200 in 53ms (compile: 2ms, render: 51ms)
- GET /mein-l21 200 in 53ms (compile: 3ms, render: 50ms)
- GET /mein-l21 200 in 52ms (compile: 4ms, render: 48ms)
- GET /mein-l21 200 in 55ms (compile: 5ms, render: 51ms)
- GET /mein-l21 200 in 70ms (compile: 5ms, render: 66ms)
- GET /mein-l21 200 in 74ms (compile: 4ms, render: 69ms)
- GET /mein-l21 200 in 79ms (compile: 4ms, render: 75ms)
- GET /mein-l21 200 in 78ms (compile: 3ms, render: 75ms)
- GET /mein-l21 200 in 67ms (compile: 3ms, render: 64ms)
- GET /mein-l21 200 in 70ms (compile: 3ms, render: 67ms)
- GET /mein-l21 200 in 64ms (compile: 4ms, render: 60ms)
- GET /mein-l21 200 in 57ms (compile: 3ms, render: 54ms)
- GET /mein-l21 200 in 53ms (compile: 3ms, render: 50ms)
- GET /mein-l21 200 in 61ms (compile: 4ms, render: 58ms)
- GET /mein-l21 200 in 46ms (compile: 3ms, render: 43ms)
- GET /mein-l21 200 in 29ms (compile: 5ms, render: 24ms)
-✓ Compiled in 63ms
- GET /mitarbeiter 200 in 98ms (compile: 66ms, render: 32ms)
-✓ Compiled in 62ms
- GET /mein-l21 200 in 91ms (compile: 62ms, render: 30ms)
- POST /api/l21/direct-conversations 200 in 811ms (compile: 243ms, render: 568ms)
- GET /mitarbeiter 200 in 84ms (compile: 61ms, render: 23ms)
- GET /mein-l21 200 in 18ms (compile: 4ms, render: 14ms)
-✓ Compiled in 291ms
- POST /api/l21/direct-conversations 200 in 550ms (compile: 3ms, render: 548ms)
- GET /mitarbeiter 200 in 25ms (compile: 4ms, render: 20ms)
- GET /mein-l21 200 in 96ms (compile: 68ms, render: 29ms)
- GET /mein-l21 200 in 134ms (compile: 2ms, render: 132ms)
-✓ Compiled in 48ms
-✓ Compiled in 135ms
-✓ Compiled in 98ms
- GET / 200 in 104ms (compile: 77ms, render: 28ms)
- GET /mein-l21 200 in 94ms (compile: 71ms, render: 23ms)
- GET / 200 in 27ms (compile: 4ms, render: 23ms)
- GET /mitarbeiter 200 in 92ms (compile: 67ms, render: 25ms)
- GET /mein-l21 200 in 26ms (compile: 5ms, render: 22ms)
-✓ Compiled in 196ms
-✓ Compiled in 74ms
- GET /mitarbeiter 200 in 32ms (compile: 5ms, render: 28ms)
- GET /mein-l21 200 in 98ms (compile: 75ms, render: 23ms)
-✓ Compiled in 175ms
- GET /mitarbeiter 200 in 18ms (compile: 5ms, render: 13ms)
- GET /mein-l21 200 in 91ms (compile: 64ms, render: 27ms)
- GET /mein-l21 200 in 159ms (compile: 4ms, render: 155ms)
-✓ Compiled in 213ms
- GET /mitarbeiter 200 in 53ms (compile: 13ms, render: 40ms)
- GET /mein-l21 200 in 280ms (compile: 192ms, render: 88ms)
- GET /mitarbeiter 200 in 27ms (compile: 3ms, render: 24ms)
- GET /mein-l21 200 in 25ms (compile: 4ms, render: 21ms)
- GET /mitarbeiter 200 in 31ms (compile: 4ms, render: 27ms)
- GET /mein-l21 200 in 21ms (compile: 3ms, render: 18ms)
- GET /kalender 200 in 75ms (compile: 61ms, render: 14ms)
- GET /mitarbeiter 200 in 19ms (compile: 3ms, render: 16ms)
- GET /mein-l21 200 in 20ms (compile: 5ms, render: 16ms)
-✓ Compiled in 79ms
- GET /mitarbeiter 200 in 24ms (compile: 3ms, render: 21ms)
- GET /mein-l21 200 in 92ms (compile: 69ms, render: 23ms)
- POST /api/l21/direct-conversations 200 in 346ms (compile: 1871µs, render: 344ms)
-✓ Compiled in 121ms
-✓ Compiled in 266ms
-✓ Compiled in 165ms
-✓ Compiled in 131ms
-✓ Compiled in 124ms
-✓ Compiled in 70ms
-✓ Compiled in 77ms
-✓ Compiled in 79ms
-✓ Compiled in 70ms
-✓ Compiled in 185ms
-✓ Compiled in 76ms
-✓ Compiled in 56ms
-✓ Compiled in 101ms
- GET /mein-l21 200 in 202ms (compile: 67ms, render: 135ms)
-✓ Compiled in 119ms
- GET /mitarbeiter 200 in 171ms (compile: 120ms, render: 51ms)
-✓ Compiled in 352ms
- GET /mein-l21 200 in 147ms (compile: 97ms, render: 51ms)
-✓ Compiled in 59ms
-✓ Compiled in 60ms
-✓ Compiled in 103ms
-✓ Compiled in 61ms
- GET /mitarbeiter 200 in 130ms (compile: 91ms, render: 39ms)
-✓ Compiled in 72ms
-✓ Compiled in 168ms
- GET /mitarbeiter 200 in 66ms (compile: 5ms, render: 62ms)
- GET /mein-l21 200 in 85ms (compile: 63ms, render: 22ms)
- GET /objekte 200 in 113ms (compile: 93ms, render: 20ms)
- GET /mein-l21 200 in 22ms (compile: 4ms, render: 18ms)
-✓ Compiled in 184ms
- GET /objekte 200 in 91ms (compile: 63ms, render: 29ms)
-✓ Compiled in 173ms
-✓ Compiled in 293ms
-✓ Compiled in 129ms
-✓ Compiled in 110ms
- GET /mein-l21 200 in 21ms (compile: 7ms, render: 14ms)
- GET /mitarbeiter 200 in 20ms (compile: 3ms, render: 17ms)
- GET /mein-l21 200 in 22ms (compile: 4ms, render: 18ms)
-✓ Compiled in 153ms
-✓ Compiled in 85ms
-⚠ Fast Refresh had to perform a full reload due to a runtime error.
- GET /mein-l21 200 in 712ms (compile: 358ms, render: 354ms)
-✓ Compiled in 109ms
-⚠ Fast Refresh had to perform a full reload due to a runtime error.
- GET /mein-l21 200 in 566ms (compile: 154ms, render: 412ms)
-✓ Compiled in 188ms
-⚠ Fast Refresh had to perform a full reload due to a runtime error.
- GET /mein-l21 200 in 732ms (compile: 225ms, render: 507ms)
-✓ Compiled in 239ms
-⚠ Fast Refresh had to perform a full reload due to a runtime error.
- GET /mein-l21 200 in 719ms (compile: 227ms, render: 492ms)
-✓ Compiled in 240ms
-✓ Compiled in 336ms
-✓ Compiled in 81ms
-✓ Compiled in 101ms
-✓ Compiled in 81ms
-✓ Compiled in 96ms
- GET /mitarbeiter 200 in 32ms (compile: 7ms, render: 25ms)
- GET /mein-l21 200 in 107ms (compile: 76ms, render: 32ms)
- GET / 200 in 27ms (compile: 7ms, render: 19ms)
- GET /buchungen 200 in 100ms (compile: 75ms, render: 25ms)
- GET /mein-l21 200 in 19ms (compile: 3ms, render: 16ms)
-✓ Compiled in 203ms
-✓ Compiled in 110ms
-✓ Compiled in 79ms
-✓ Compiled in 287ms
-✓ Compiled in 229ms
-✓ Compiled in 91ms
-✓ Compiled in 141ms
-✓ Compiled in 132ms
-✓ Compiled in 68ms
-✓ Compiled in 126ms
-✓ Compiled in 123ms
-✓ Compiled in 76ms
- GET /kunden 200 in 90ms (compile: 77ms, render: 12ms)
- GET /objekte 200 in 84ms (compile: 65ms, render: 19ms)
- GET /mein-l21 200 in 136ms (compile: 73ms, render: 62ms)
- GET /objekte 200 in 24ms (compile: 3ms, render: 21ms)
- GET /mein-l21 200 in 20ms (compile: 3ms, render: 17ms)
- GET /objekte 200 in 22ms (compile: 4ms, render: 19ms)
- GET /mein-l21 200 in 20ms (compile: 5ms, render: 15ms)
- GET /objekte 200 in 22ms (compile: 4ms, render: 18ms)
- GET /mein-l21 200 in 22ms (compile: 9ms, render: 14ms)
-✓ Compiled in 108ms
- GET /mitarbeiter 200 in 123ms (compile: 86ms, render: 36ms)
- GET /mein-l21 200 in 115ms (compile: 84ms, render: 31ms)
- GET /mitarbeiter 200 in 20ms (compile: 3ms, render: 18ms)
-✓ Compiled in 89ms
- GET /mein-l21 200 in 106ms (compile: 82ms, render: 24ms)
- GET /objekte 200 in 26ms (compile: 4ms, render: 22ms)
-✓ Compiled in 175ms
- GET /mein-l21 200 in 140ms (compile: 107ms, render: 33ms)
-✓ Compiled in 247ms
-✓ Compiled in 126ms
-✓ Compiled in 197ms
-✓ Compiled in 113ms
- GET /objekte 200 in 30ms (compile: 6ms, render: 23ms)
- GET /kalender 200 in 45ms (compile: 16ms, render: 28ms)
- GET /kunden 200 in 29ms (compile: 4ms, render: 25ms)
- GET /objekte 200 in 31ms (compile: 5ms, render: 26ms)
- GET /import 200 in 339ms (compile: 277ms, render: 62ms)
- GET /api/lexoffice/test 200 in 570ms (compile: 187ms, render: 383ms)
- GET /api/lexoffice/contacts 200 in 9.9s (compile: 177ms, render: 9.7s)
- GET /api/lexoffice/vouchers?type=invoice&page=0&size=25&dateFrom=2026-03-16&dateTo=2026-03-16 200 in 251ms (compile: 167ms, render: 84ms)
- GET /api/lexoffice/vouchers?type=invoice&statusFilter=overdue&page=0&size=100&dateFrom=2026-03-16&dateTo=2026-03-16 200 in 76ms (compile: 7ms, render: 69ms)
- GET /api/lexoffice/vouchers?type=creditnote&page=0&size=100&dateFrom=2026-03-16&dateTo=2026-03-16 200 in 2.1s (compile: 5ms, render: 2.1s)
- GET /api/lexoffice/vouchers?type=orderconfirmation&page=0&size=100&dateFrom=2026-03-16&dateTo=2026-03-16 200 in 74ms (compile: 5ms, render: 69ms)
- GET /api/lexoffice/vouchers?type=downpaymentinvoice&page=0&size=100&dateFrom=2026-03-16&dateTo=2026-03-16 200 in 2.1s (compile: 5ms, render: 2.1s)
- GET /api/lexoffice/vouchers?type=invoice&id=aed477f5-d461-4a40-b298-d82ab54e0a1e 200 in 241ms (compile: 9ms, render: 232ms)
- GET /api/lexoffice/vouchers?type=invoice&id=ef5968b9-fbc2-4cc4-af19-4fa2e53fb210 200 in 282ms (compile: 5ms, render: 277ms)
- GET /api/lexoffice/vouchers?type=invoice&id=afd5e4f9-f34e-41c5-9233-0834c89756f4 200 in 262ms (compile: 6ms, render: 256ms)
- GET /api/lexoffice/vouchers?type=invoice&id=ac6de8f2-4180-421e-8367-7ef758bf557a 200 in 231ms (compile: 5ms, render: 226ms)
- GET /api/lexoffice/vouchers?type=invoice&id=17431e5e-2951-4012-8407-141f1789a30e 200 in 225ms (compile: 6ms, render: 219ms)
- GET /kalender 200 in 52ms (compile: 6ms, render: 46ms)
- GET /buchungen/book-1773156080334-5wjkx 200 in 824ms (compile: 761ms, render: 63ms)
- GET /objekte 200 in 50ms (compile: 7ms, render: 43ms)
- GET /analytics 200 in 285ms (compile: 231ms, render: 54ms)
- GET /kalender 200 in 64ms (compile: 7ms, render: 57ms)
- GET /mein-l21 200 in 432ms (compile: 341ms, render: 91ms)
- GET /mitarbeiter 200 in 51ms (compile: 11ms, render: 40ms)
- GET /mein-l21 200 in 45ms (compile: 6ms, render: 39ms)
- GET /mitarbeiter 200 in 21ms (compile: 3ms, render: 18ms)
- GET /kalender 200 in 15ms (compile: 3ms, render: 12ms)
- GET /buchungen 200 in 27ms (compile: 6ms, render: 21ms)
- GET /buchungen/smart 200 in 84ms (compile: 67ms, render: 17ms)
- GET /objekte 200 in 23ms (compile: 4ms, render: 20ms)
-✓ Compiled in 427ms
-✓ Compiled in 522ms
- GET /kalender 200 in 124ms (compile: 100ms, render: 24ms)
- GET /objekte 200 in 132ms (compile: 89ms, render: 42ms)
-✓ Compiled in 153ms
- GET /objekte 200 in 282ms (compile: 156ms, render: 126ms)
- GET /objekte 200 in 128ms (compile: 5ms, render: 123ms)
- GET /objekte 200 in 122ms (compile: 6ms, render: 115ms)
- GET /objekte 200 in 128ms (compile: 4ms, render: 124ms)
- GET /objekte 200 in 78ms (compile: 9ms, render: 68ms)
- GET /objekte 200 in 78ms (compile: 4ms, render: 75ms)
- GET /objekte 200 in 105ms (compile: 8ms, render: 96ms)
- GET /objekte 200 in 90ms (compile: 4ms, render: 86ms)
- GET /objekte 200 in 104ms (compile: 2ms, render: 102ms)
- GET /objekte 200 in 86ms (compile: 3ms, render: 83ms)
- GET /objekte 200 in 98ms (compile: 8ms, render: 90ms)
- GET /objekte 200 in 93ms (compile: 4ms, render: 90ms)
- GET /objekte 200 in 83ms (compile: 3ms, render: 80ms)
- GET /objekte 200 in 82ms (compile: 5ms, render: 77ms)
- GET /objekte 200 in 80ms (compile: 7ms, render: 73ms)
- GET /objekte 200 in 101ms (compile: 5ms, render: 97ms)
- GET /objekte 200 in 75ms (compile: 4ms, render: 71ms)
- GET /objekte 200 in 78ms (compile: 3ms, render: 75ms)
- GET /objekte 200 in 74ms (compile: 5ms, render: 69ms)
- GET /objekte 200 in 66ms (compile: 3ms, render: 64ms)
- GET /objekte 200 in 92ms (compile: 4ms, render: 87ms)
- GET /objekte 200 in 74ms (compile: 2ms, render: 72ms)
- GET /objekte 200 in 111ms (compile: 3ms, render: 109ms)
- GET /objekte 200 in 109ms (compile: 4ms, render: 105ms)
- GET /objekte 200 in 108ms (compile: 8ms, render: 100ms)
- GET /objekte 200 in 98ms (compile: 3ms, render: 96ms)
- GET /objekte 200 in 93ms (compile: 3ms, render: 90ms)
- GET /objekte 200 in 73ms (compile: 5ms, render: 67ms)
- GET /objekte 200 in 116ms (compile: 3ms, render: 113ms)
- GET /objekte 200 in 100ms (compile: 2ms, render: 98ms)
- GET /objekte 200 in 181ms (compile: 4ms, render: 177ms)
- GET /objekte 200 in 170ms (compile: 5ms, render: 165ms)
- GET /objekte 200 in 152ms (compile: 4ms, render: 148ms)
- GET /objekte 200 in 66ms (compile: 6ms, render: 60ms)
- GET /objekte 200 in 65ms (compile: 3ms, render: 62ms)
- GET /objekte 200 in 63ms (compile: 2ms, render: 61ms)
- GET /objekte 200 in 101ms (compile: 4ms, render: 97ms)
- GET /objekte 200 in 94ms (compile: 7ms, render: 87ms)
- GET /objekte 200 in 105ms (compile: 3ms, render: 101ms)
- GET /objekte 200 in 148ms (compile: 10ms, render: 138ms)
- GET /objekte 200 in 146ms (compile: 6ms, render: 140ms)
- GET /objekte 200 in 136ms (compile: 31ms, render: 105ms)
- GET /objekte 200 in 114ms (compile: 12ms, render: 102ms)
- GET /objekte 200 in 91ms (compile: 4ms, render: 87ms)
- GET /objekte 200 in 100ms (compile: 3ms, render: 97ms)
- GET /objekte 200 in 81ms (compile: 4ms, render: 77ms)
- GET /objekte 200 in 76ms (compile: 3ms, render: 73ms)
- GET /objekte 200 in 65ms (compile: 3ms, render: 61ms)
- GET /objekte 200 in 63ms (compile: 4ms, render: 58ms)
- GET /objekte 200 in 55ms (compile: 3ms, render: 52ms)
- GET /objekte 200 in 56ms (compile: 1973µs, render: 54ms)
- GET /objekte 200 in 53ms (compile: 2ms, render: 51ms)
- GET /objekte 200 in 37ms (compile: 3ms, render: 34ms)
- GET /objekte 200 in 18ms (compile: 2ms, render: 16ms)
-✓ Compiled in 117ms
-✓ Compiled in 95ms
-✓ Compiled in 175ms
-⚠ Fast Refresh had to perform a full reload due to a runtime error.
- GET /objekte 200 in 485ms (compile: 162ms, render: 323ms)
-✓ Compiled in 57ms
-✓ Compiled in 101ms
- POST /api/properties/images 400 in 1167ms (compile: 289ms, render: 878ms)
- POST /api/properties/images 200 in 823ms (compile: 85ms, render: 738ms)
-✓ Compiled in 277ms
- GET /buchungen/smart 200 in 127ms (compile: 93ms, render: 34ms)
- GET /buchungen 200 in 103ms (compile: 76ms, render: 27ms)
- GET /kalender 200 in 80ms (compile: 36ms, render: 44ms)
- GET /mitarbeiter 200 in 251ms (compile: 191ms, render: 60ms)
- GET /mein-l21 200 in 204ms (compile: 153ms, render: 52ms)
- GET /buchungen/smart 200 in 22ms (compile: 3ms, render: 19ms)
- GET /mitarbeiter 200 in 21ms (compile: 4ms, render: 17ms)
- GET /mein-l21 200 in 24ms (compile: 5ms, render: 19ms)
- GET /mitarbeiter 200 in 22ms (compile: 3ms, render: 19ms)
- GET /mein-l21 200 in 21ms (compile: 3ms, render: 18ms)
- GET /mitarbeiter 200 in 23ms (compile: 3ms, render: 19ms)
- GET /kalender 200 in 22ms (compile: 4ms, render: 18ms)
- GET /mitarbeiter 200 in 19ms (compile: 3ms, render: 16ms)
- GET /mein-l21 200 in 22ms (compile: 3ms, render: 19ms)
- GET /buchungen 200 in 21ms (compile: 3ms, render: 18ms)
- GET /buchungen/book-1773675838653-dqopd 200 in 158ms (compile: 121ms, render: 37ms)
- GET /objekte 200 in 125ms (compile: 94ms, render: 32ms)
- GET /mein-l21 200 in 74ms (compile: 12ms, render: 62ms)
+✓ Ready in 2.7s
+ GET / 200 in 3.1s (compile: 2.9s, render: 228ms)
+ GET / 200 in 72ms (compile: 14ms, render: 58ms)
+ GET /import 200 in 1346ms (compile: 1267ms, render: 80ms)
+ GET /import 200 in 36ms (compile: 8ms, render: 28ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1561ms (compile: 1079ms, render: 482ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1576ms (compile: 1076ms, render: 499ms)
+ POST /api/lexoffice/sync 200 in 120s (compile: 3ms, render: 120s)
+ GET /api/lexoffice/sync?limit=100 200 in 294ms (compile: 9ms, render: 285ms)
+ GET /import 200 in 419ms (compile: 96ms, render: 322ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1542ms (compile: 6ms, render: 1536ms)
+ GET / 200 in 31ms (compile: 13ms, render: 18ms)
+ GET /analytics 200 in 1002ms (compile: 955ms, render: 47ms)
+ GET /kalender 200 in 654ms (compile: 612ms, render: 42ms)
+ GET /import 200 in 37ms (compile: 17ms, render: 20ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1175ms (compile: 528ms, render: 647ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1198ms (compile: 526ms, render: 672ms)
+○ Compiling /buchungen ...
+ GET /buchungen 200 in 5.1s (compile: 4.9s, render: 216ms)
+ GET /buchungen 200 in 316ms (compile: 37ms, render: 279ms)
+ GET /buchungen 200 in 70ms (compile: 13ms, render: 57ms)
+○ Compiling /api/bookings ...
+ GET /buchungen 200 in 423ms (compile: 307ms, render: 115ms)
+ GET /api/lexoffice/sync 200 in 4.6s (compile: 3.9s, render: 745ms)
+ GET /api/lexoffice/sync 200 in 4.6s (compile: 3.9s, render: 750ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 4.9s (compile: 3.9s, render: 1060ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 5.2s (compile: 3.9s, render: 1287ms)
+○ Compiling /buchungen/smart ...
+ GET /buchungen/smart 200 in 5.2s (compile: 5.0s, render: 154ms)
+ GET /buchungen/smart 200 in 71ms (compile: 21ms, render: 51ms)
+ GET /buchungen 200 in 104ms (compile: 46ms, render: 58ms)
+ GET /api/lexoffice/sync 200 in 920ms (compile: 280ms, render: 640ms)
+ GET /api/lexoffice/sync 200 in 941ms (compile: 288ms, render: 653ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 1132ms (compile: 408ms, render: 725ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 1294ms (compile: 414ms, render: 879ms)
+ GET /buchungen/smart 200 in 77ms (compile: 15ms, render: 62ms)
+ GET /import 200 in 100ms (compile: 51ms, render: 49ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1324ms (compile: 7ms, render: 1318ms)
+ GET /api/lexoffice/sync?limit=100 200 in 1346ms (compile: 11ms, render: 1335ms)
+ GET /import 200 in 323ms (compile: 201ms, render: 122ms)
+ PATCH /api/lexoffice/queue/df135f2c-a797-4fb5-a1b4-c5e5eff40bb2 200 in 3.8s (compile: 3.2s, render: 659ms)
+ PATCH /api/lexoffice/queue/df135f2c-a797-4fb5-a1b4-c5e5eff40bb2 200 in 789ms (compile: 110ms, render: 679ms)
+ GET /import 200 in 252ms (compile: 152ms, render: 100ms)
+ GET /kalender 200 in 2.2s (compile: 2.1s, render: 78ms)
+ GET /kalender 200 in 49ms (compile: 7ms, render: 43ms)
+ POST /api/lexoffice/queue/df135f2c-a797-4fb5-a1b4-c5e5eff40bb2/import 200 in 11.5s (compile: 2.2s, render: 9.4s)
+ GET /api/lexoffice/sync?limit=100 200 in 376ms (compile: 150ms, render: 226ms)
+ GET /kalender 200 in 55ms (compile: 9ms, render: 46ms)
+ GET /kalender 200 in 749ms (compile: 76ms, render: 672ms)

@@ -69,6 +69,62 @@ export interface Booking {
   source: 'manual' | 'lexoffice_import' | 'lexoffice_sonstige' | 'direct'
 }
 
+export type LexofficeImportConfidence = 'high' | 'medium' | 'low'
+export type LexofficeImportStatus = 'pending_review' | 'auto_imported' | 'duplicate' | 'error'
+
+export interface LexofficeImportPosition {
+  index: number
+  rawText: string
+  positionType: 'booking' | 'cleaning'
+  propertyId?: string
+  assignedPropertyId?: string
+  checkIn?: string
+  checkOut?: string
+  nights?: number
+  bedsBooked?: number
+  lineAmount?: number
+  confidence: LexofficeImportConfidence
+}
+
+export interface LexofficeImportQueueItem {
+  voucherId: string
+  voucherNumber: string
+  voucherType: string
+  voucherStatus: string
+  voucherDate: string
+  contactName: string
+  lexofficeContactId?: string
+  totalAmount: number
+  currency: string
+  isStorno: boolean
+  confidence: LexofficeImportConfidence
+  importStatus: LexofficeImportStatus
+  reviewReason: string
+  errorMessage?: string
+  suggestedCustomerId?: string
+  bookingIds: string[]
+  positions: LexofficeImportPosition[]
+  detail?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+  lastSeenAt: string
+  importedAt?: string
+}
+
+export interface LexofficeSyncState {
+  lastRunAt?: string
+  lastSuccessAt?: string
+  lastError?: string
+  lastSummary?: {
+    scanned: number
+    pendingReview: number
+    autoImported: number
+    duplicates: number
+    errors: number
+    stornoUpdated: number
+  }
+}
+
 export interface LexofficeInvoice {
   id: string
   voucherNumber: string

@@ -107,6 +107,180 @@ export async function loadBookingsServer(): Promise<Booking[]> {
   return (data ?? []).map(mapBooking)
 }
 
+export type BookingListSort = 'invoiceDesc' | 'createdDesc'
+export type BookingListViewMode = 'invoices' | 'bookings'
+
+export interface BookingInvoiceGroup {
+  invoiceNumber: string
+  voucherId?: string
+  contactName: string
+  totalAmount: number
+  bookingCount: number
+  bookings: Booking[]
+  checkInMin: string
+  checkOutMax: string
+  nightsTotal: number
+  bedsMax: number
+  source: string
+  paymentStatus: string
+  status: string
+  isStorniert: boolean
+}
+
+export interface BookingListPageResult {
+  viewMode: BookingListViewMode
+  totalBookings: number
+  totalInvoices: number
+  totalRevenue: number
+  page: number
+  pageSize: number
+  totalPages: number
+  bookings: Booking[]
+  invoiceGroups: BookingInvoiceGroup[]
+}
+
+interface BookingListParams {
+  search?: string
+  statusFilter?: string
+  locationFilter?: string
+  sortBy?: BookingListSort
+  viewMode?: BookingListViewMode
+  page?: number
+  pageSize?: number
+}
+
+function sortBookings(bookings: Booking[], sortBy: BookingListSort) {
+  return [...bookings].sort((a, b) => {
+    if (sortBy === 'invoiceDesc') {
+      if (a.invoiceNumber && b.invoiceNumber) {
+        return b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, { numeric: true, sensitivity: 'base' })
+      }
+      if (a.invoiceNumber) return -1
+      if (b.invoiceNumber) return 1
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+}
+
+function buildInvoiceGroups(bookings: Booking[], customersById: Map<string, Customer>) {
+  const groups = new Map<string, Booking[]>()
+  for (const booking of bookings) {
+    const key = booking.invoiceNumber || `_single_${booking.id}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(booking)
+  }
+
+  const result: BookingInvoiceGroup[] = []
+  for (const [invoiceNumber, groupedBookings] of groups) {
+    const isSingle = invoiceNumber.startsWith('_single_')
+    const firstBooking = groupedBookings[0]
+    const customer = customersById.get(firstBooking.customerId)
+    const totalAmount = groupedBookings.reduce((sum, booking) => sum + booking.totalPrice, 0)
+    const checkInMin = groupedBookings.reduce((min, booking) => booking.checkIn < min ? booking.checkIn : min, groupedBookings[0].checkIn)
+    const checkOutMax = groupedBookings.reduce((max, booking) => booking.checkOut > max ? booking.checkOut : max, groupedBookings[0].checkOut)
+    const nightsTotal = groupedBookings.reduce((sum, booking) => sum + booking.nights, 0)
+    const bedsMax = Math.max(...groupedBookings.map(booking => booking.bedsBooked))
+    const isStorniert = groupedBookings.every(booking => booking.status === 'storniert')
+    const statusPriority = ['bestaetigt', 'abgeschlossen', 'option', 'anfrage', 'storniert']
+    const dominantStatus = statusPriority.find(status => groupedBookings.some(booking => booking.status === status)) ?? groupedBookings[0].status
+    const paymentPriority = ['offen', 'teilweise', 'bezahlt', 'erstattet']
+    const dominantPayment = paymentPriority.find(status => groupedBookings.some(booking => booking.paymentStatus === status)) ?? groupedBookings[0].paymentStatus
+
+    result.push({
+      invoiceNumber: isSingle ? '' : invoiceNumber,
+      voucherId: firstBooking.lexofficeInvoiceId,
+      contactName: customer?.companyName ?? '–',
+      totalAmount,
+      bookingCount: groupedBookings.length,
+      bookings: groupedBookings,
+      checkInMin,
+      checkOutMax,
+      nightsTotal,
+      bedsMax,
+      source: firstBooking.source ?? 'manual',
+      paymentStatus: dominantPayment,
+      status: dominantStatus,
+      isStorniert,
+    })
+  }
+
+  return result
+}
+
+export async function loadBookingListPage(params: BookingListParams = {}): Promise<BookingListPageResult> {
+  const search = params.search ?? ''
+  const statusFilter = params.statusFilter ?? 'all'
+  const locationFilter = params.locationFilter ?? 'all'
+  const sortBy = params.sortBy ?? 'invoiceDesc'
+  const viewMode = params.viewMode ?? 'invoices'
+  const pageSize = Math.max(1, params.pageSize ?? 50)
+  const page = Math.max(1, params.page ?? 1)
+
+  const [bookings, properties, customers] = await Promise.all([
+    loadBookingsServer(),
+    loadPropertiesServer(),
+    loadCustomersServer(),
+  ])
+
+  const propertiesById = new Map(properties.map(property => [property.id, property]))
+  const customersById = new Map(customers.map(customer => [customer.id, customer]))
+  const normalizedSearch = search.toLowerCase()
+
+  const filtered = sortBookings(bookings.filter(booking => {
+    const property = propertiesById.get(booking.propertyId)
+    const customer = customersById.get(booking.customerId)
+    const matchSearch = !search ||
+      booking.bookingNumber.toLowerCase().includes(normalizedSearch) ||
+      (property?.name ?? '').toLowerCase().includes(normalizedSearch) ||
+      (property?.shortCode ?? '').toLowerCase().includes(normalizedSearch) ||
+      (customer?.companyName ?? '').toLowerCase().includes(normalizedSearch) ||
+      `${customer?.firstName} ${customer?.lastName}`.toLowerCase().includes(normalizedSearch) ||
+      (booking.invoiceNumber ?? '').toLowerCase().includes(normalizedSearch)
+    const matchStatus = statusFilter === 'all' || booking.status === statusFilter
+    const matchLocation = locationFilter === 'all' || property?.locationId === locationFilter
+    return matchSearch && matchStatus && matchLocation
+  }), sortBy)
+
+  const invoiceGroups = buildInvoiceGroups(filtered, customersById)
+  const totalRevenue = filtered
+    .filter(booking => booking.status !== 'storniert')
+    .reduce((sum, booking) => sum + booking.totalPrice, 0)
+
+  if (viewMode === 'bookings') {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    const safePage = Math.min(page, totalPages)
+    const start = (safePage - 1) * pageSize
+
+    return {
+      viewMode,
+      totalBookings: filtered.length,
+      totalInvoices: invoiceGroups.length,
+      totalRevenue,
+      page: safePage,
+      pageSize,
+      totalPages,
+      bookings: filtered.slice(start, start + pageSize),
+      invoiceGroups: [],
+    }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(invoiceGroups.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const start = (safePage - 1) * pageSize
+
+  return {
+    viewMode,
+    totalBookings: filtered.length,
+    totalInvoices: invoiceGroups.length,
+    totalRevenue,
+    page: safePage,
+    pageSize,
+    totalPages,
+    bookings: [],
+    invoiceGroups: invoiceGroups.slice(start, start + pageSize),
+  }
+}
+
 export async function loadCustomersServer(): Promise<Customer[]> {
   const { data, error } = await supabaseAdmin.from('customers').select('*').order('company_name')
   if (error) throw new Error(`Auftraggeber konnten nicht geladen werden: ${error.message}`)
@@ -230,4 +404,37 @@ export async function addBookingServer(input: BookingInsertInput): Promise<Booki
   const { data, error } = await supabaseAdmin.from('bookings').insert(row).select().single()
   if (error) throw new Error(`Buchung konnte nicht erstellt werden: ${error.message}`)
   return mapBooking(data)
+}
+
+export async function updateBookingServer(bookingId: string, data: Partial<Booking>): Promise<Booking> {
+  const row: Record<string, unknown> = {
+    updated_at: new Date().toISOString().slice(0, 10),
+  }
+
+  if (data.propertyId !== undefined) row.property_id = data.propertyId
+  if (data.customerId !== undefined) row.customer_id = data.customerId
+  if (data.checkIn !== undefined) row.check_in = data.checkIn
+  if (data.checkOut !== undefined) row.check_out = data.checkOut
+  if (data.nights !== undefined) row.nights = data.nights
+  if (data.bedsBooked !== undefined) row.beds_booked = data.bedsBooked
+  if (data.pricePerBedNight !== undefined) row.price_per_bed_night = data.pricePerBedNight
+  if (data.cleaningFee !== undefined) row.cleaning_fee = data.cleaningFee
+  if (data.totalPrice !== undefined) row.total_price = data.totalPrice
+  if (data.status !== undefined) row.status = data.status
+  if (data.paymentStatus !== undefined) row.payment_status = data.paymentStatus
+  if (data.notes !== undefined) row.notes = data.notes
+  if (data.lexofficeInvoiceId !== undefined) row.lexoffice_invoice_id = data.lexofficeInvoiceId
+  if (data.lexofficeQuotationId !== undefined) row.lexoffice_quotation_id = data.lexofficeQuotationId
+  if (data.invoiceNumber !== undefined) row.invoice_number = data.invoiceNumber
+  if (data.source !== undefined) row.source = data.source
+
+  const { data: updated, error } = await supabaseAdmin
+    .from('bookings')
+    .update(row)
+    .eq('id', bookingId)
+    .select('*')
+    .single()
+
+  if (error) throw new Error(`Buchung konnte nicht aktualisiert werden: ${error.message}`)
+  return mapBooking(updated)
 }

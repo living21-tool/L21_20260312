@@ -1,0 +1,22 @@
+▲ Next.js 16.1.6 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.112:3001
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 2s
+○ Compiling /buchungen ...
+ GET /buchungen 200 in 7.1s (compile: 6.8s, render: 376ms)
+ GET / 200 in 1435ms (compile: 1163ms, render: 271ms)
+ GET /import 200 in 580ms (compile: 544ms, render: 36ms)
+ GET /api/lexoffice/sync?limit=100 200 in 2.0s (compile: 1542ms, render: 474ms)
+ GET /api/lexoffice/sync?limit=100 200 in 2.0s (compile: 1540ms, render: 489ms)
+ GET /analytics 200 in 686ms (compile: 653ms, render: 33ms)
+ GET / 200 in 37ms (compile: 17ms, render: 20ms)
+ GET /import 200 in 40ms (compile: 18ms, render: 22ms)
+ GET /api/lexoffice/sync?limit=100 200 in 359ms (compile: 49ms, render: 310ms)
+ GET /api/lexoffice/sync?limit=100 200 in 388ms (compile: 48ms, render: 340ms)
+○ Compiling /kalender ...
+ GET /kalender 200 in 4.1s (compile: 3.9s, render: 138ms)
+ GET /kalender 200 in 684ms (compile: 73ms, render: 611ms)
+ GET /buchungen 200 in 1566ms (compile: 1499ms, render: 67ms)

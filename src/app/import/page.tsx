@@ -1,14 +1,14 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useProperties, useLocations, useCustomers, useBookings } from '@/lib/store'
 import { formatCurrency } from '@/lib/utils'
 import { LexVoucherListItem, LexInvoice, LexContact, LexLineItem } from '@/lib/lexoffice'
 import {
   CheckCircle, XCircle, AlertCircle, ChevronRight,
   RefreshCw, Wifi, Download, Pencil, ChevronLeft, ChevronRight as ChevronR,
-  FileText
+  FileText, Clock3, Save
 } from 'lucide-react'
-import { Property } from '@/lib/types'
+import { LexofficeImportPosition, LexofficeImportQueueItem, LexofficeSyncState, Property } from '@/lib/types'
 import { PropertySearchInput } from '@/components/PropertySearchInput'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,6 +44,19 @@ interface VoucherPage {
   totalPages: number
   currentPage: number
   pageSize: number
+}
+
+interface LexofficeSyncOverview {
+  configured?: boolean
+  setupMessage?: string
+  state: LexofficeSyncState
+  counts: {
+    pendingReview: number
+    autoImported: number
+    duplicates: number
+    errors: number
+  }
+  items: LexofficeImportQueueItem[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,7 +144,7 @@ function extractDatesNights(text: string) {
 }
 
 // Erkennt Endreinigungspositionen anhand von Schlüsselwörtern
-const CLEANING_RE = /endreinigung|abschlussreinigung|schlussreinigung|reinigungspauschale|cleaning\s*fee/i
+const CLEANING_RE = /endreinigung|abschlussreinigung|schlussreinigung|reinigungspauschale|reinigungsgeb(?:u|ü)hr|cleaning\s*fee/i
 
 /** Erstellt ParsedPosition[] aus den Positionen einer LexInvoice. */
 function buildPositions(detail: LexInvoice, properties: Property[]): ParsedPosition[] {
@@ -261,13 +274,105 @@ const confStyle = {
 }
 const confLabel = { high: 'Hoch', medium: 'Mittel', low: 'Niedrig' }
 
+function evaluateQueueDraft(item: LexofficeImportQueueItem) {
+  return evaluateQueueDraftStrict(item)
+
+  if (item.isStorno) {
+    return {
+      confidence: 'medium' as const,
+      canImport: false,
+      message: item.reviewReason || 'Storno kann erst importiert werden, wenn die Ursprungsrechnung bereits im System ist.',
+    }
+  }
+
+  if (item.isStorno) {
+    return {
+      confidence: item.confidence,
+      canImport: item.confidence === 'high',
+      message: item.reviewReason || 'Storno prüfen',
+    }
+  }
+
+  let hasAnySignal = false
+  const reasons = new Set<string>()
+
+  for (const position of item.positions) {
+    if (position.positionType === 'booking') {
+      if (position.propertyId || position.checkIn || position.checkOut) hasAnySignal = true
+      if (!position.propertyId) reasons.add('Objekt fehlt')
+      if (!position.checkIn || !position.checkOut) reasons.add('Zeitraum fehlt')
+    }
+    if (position.positionType === 'cleaning') {
+      if (position.assignedPropertyId) hasAnySignal = true
+      if (!position.assignedPropertyId) reasons.add('Endreinigung nicht zugeordnet')
+    }
+  }
+
+  const canImport = reasons.size === 0 && item.positions.some(position => position.positionType === 'booking')
+  return {
+    confidence: canImport ? 'high' as const : hasAnySignal ? 'medium' as const : 'low' as const,
+    canImport,
+    message: canImport ? 'Bereit für manuellen Import' : [...reasons].join(' · '),
+  }
+}
+
+function evaluateQueueDraftStrict(item: LexofficeImportQueueItem) {
+  if (item.isStorno) {
+    return {
+      confidence: 'medium' as const,
+      canImport: false,
+      message: item.reviewReason || 'Storno kann erst importiert werden, wenn die Ursprungsrechnung bereits im System ist.',
+    }
+  }
+
+  let hasAnySignal = false
+  const reasons = new Set<string>()
+
+  for (const position of item.positions) {
+    if (position.positionType === 'booking') {
+      if (position.propertyId || position.checkIn || position.checkOut) hasAnySignal = true
+      if (!position.propertyId) reasons.add('Objekt fehlt')
+      if (!position.checkIn || !position.checkOut) reasons.add('Zeitraum fehlt')
+      if (position.confidence !== 'high') reasons.add('Mindestens eine Buchungsposition ist noch nicht auf hoher Sicherheit')
+    }
+    if (position.positionType === 'cleaning') {
+      if (position.assignedPropertyId) hasAnySignal = true
+      if (!position.assignedPropertyId) reasons.add('Endreinigung nicht zugeordnet')
+      if (position.confidence !== 'high') reasons.add('Mindestens eine Endreinigung ist noch nicht auf hoher Sicherheit')
+    }
+  }
+
+  const canImport = reasons.size === 0 && item.positions.some(position => position.positionType === 'booking')
+  return {
+    confidence: canImport ? 'high' as const : hasAnySignal ? 'medium' as const : 'low' as const,
+    canImport,
+    message: canImport ? 'Bereit fuer manuellen Import' : [...reasons].join(' · '),
+  }
+}
+
+function recalculatePositionConfidence(position: LexofficeImportPosition): LexofficeImportPosition {
+  if (position.positionType === 'booking') {
+    const hasProperty = Boolean(position.propertyId)
+    const hasDates = Boolean(position.checkIn && position.checkOut)
+    return {
+      ...position,
+      confidence: hasProperty && hasDates ? 'high' : hasProperty || hasDates ? 'medium' : 'low',
+    }
+  }
+
+  return {
+    ...position,
+    confidence: position.assignedPropertyId ? 'high' : (position.lineAmount != null ? 'medium' : 'low'),
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ImportPage() {
   const { properties } = useProperties()
   const { locations }  = useLocations()
   const { customers, add: addCustomer, update: updateCustomer } = useCustomers()
-  const { bookings, add: addBooking, update: updateBooking } = useBookings()
+  const { bookings, add: addBooking, update: updateBooking, load } = useBookings()
 
   const [step, setStep]   = useState<'connect' | 'load' | 'review'>('connect')
   const [loading, setLoading]   = useState(false)
@@ -283,7 +388,131 @@ export default function ImportPage() {
   const [loadAllProgress, setLoadAllProgress] = useState<{ page: number; total: number } | null>(null)
   const [dateFrom, setDateFrom] = useState(() => `${new Date().getFullYear()}-01-01`)
   const [dateTo,   setDateTo]   = useState(() => new Date().toISOString().slice(0, 10))
+  const [syncOverview, setSyncOverview] = useState<LexofficeSyncOverview | null>(null)
+  const [syncLoading, setSyncLoading] = useState(true)
+  const [syncRunning, setSyncRunning] = useState(false)
+  const [syncSavingId, setSyncSavingId] = useState<string | null>(null)
+  const [syncImportingId, setSyncImportingId] = useState<string | null>(null)
+  const [expandedQueueId, setExpandedQueueId] = useState<string | null>(null)
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'info'; message: string } | null>(null)
   const abortRef = useRef(false)
+
+  async function loadSyncOverview() {
+    try {
+      const response = await fetch('/api/lexoffice/sync?limit=100', { cache: 'no-store' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Sync-Übersicht konnte nicht geladen werden.')
+      setSyncOverview(data)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSyncLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadSyncOverview()
+  }, [])
+
+  async function runSyncNow() {
+    try {
+      setSyncRunning(true)
+      setError(null)
+      setSyncFeedback(null)
+      const response = await fetch('/api/lexoffice/sync', { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Sync konnte nicht gestartet werden.')
+      setSyncFeedback({
+        type: 'success',
+        message: `Lexoffice-Sync abgeschlossen: ${data.autoImported ?? 0} importiert, ${data.pendingReview ?? 0} offen zur Prüfung.`,
+      })
+      await loadSyncOverview()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSyncRunning(false)
+    }
+  }
+
+  function updateQueuePosition(voucherId: string, index: number, patch: Partial<LexofficeImportPosition>) {
+    setSyncOverview(prev => prev ? {
+      ...prev,
+      items: prev.items.map(item => item.voucherId !== voucherId ? item : {
+        ...item,
+        positions: item.positions.map((position, positionIndex) =>
+          positionIndex === index ? recalculatePositionConfidence({ ...position, ...patch }) : position,
+        ),
+      }),
+    } : prev)
+  }
+
+  async function saveQueueItem(voucherId: string, options?: { throwOnError?: boolean; suppressFeedback?: boolean }) {
+    const item = syncOverview?.items.find(entry => entry.voucherId === voucherId)
+    if (!item) return
+    try {
+      setSyncSavingId(voucherId)
+      setError(null)
+      setSyncFeedback(null)
+      const response = await fetch(`/api/lexoffice/queue/${encodeURIComponent(voucherId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positions: item.positions }),
+      })
+      const data = await response.json()
+      if (!response.ok || data?.ok === false) throw new Error(data.error ?? 'Queue-Eintrag konnte nicht gespeichert werden.')
+      setSyncOverview(prev => prev ? {
+        ...prev,
+        items: prev.items.map(entry => entry.voucherId === voucherId ? data : entry),
+      } : prev)
+      if (!options?.suppressFeedback) {
+        setSyncFeedback({
+          type: 'info',
+          message: `${item.voucherNumber || voucherId} wurde gespeichert.`,
+        })
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e)
+      setError(message)
+      if (options?.throwOnError) {
+        throw new Error(message)
+      }
+    } finally {
+      setSyncSavingId(null)
+    }
+  }
+
+  async function importQueueItem(voucherId: string) {
+    try {
+      setSyncImportingId(voucherId)
+      setError(null)
+      setSyncFeedback(null)
+      await saveQueueItem(voucherId, { throwOnError: true, suppressFeedback: true })
+      const response = await fetch(`/api/lexoffice/queue/${encodeURIComponent(voucherId)}/import`, {
+        method: 'POST',
+      })
+      const data = await response.json()
+      if (!response.ok || data?.ok === false) throw new Error(data.error ?? 'Queue-Eintrag konnte nicht importiert werden.')
+      setSyncOverview(prev => prev ? {
+        ...prev,
+        counts: {
+          ...prev.counts,
+          pendingReview: Math.max(0, prev.counts.pendingReview - 1),
+          autoImported: prev.counts.autoImported + 1,
+        },
+        items: prev.items.filter(entry => entry.voucherId !== voucherId),
+      } : prev)
+      setSyncFeedback({
+        type: 'success',
+        message: `${data.voucherNumber || voucherId} wurde erfolgreich importiert.`,
+      })
+      await loadSyncOverview()
+      await load()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSyncImportingId(null)
+    }
+  }
 
   // ── Sort vouchers by Rechnungsnummer DESC (z.B. RE2026-0218 > RE2026-0217) ──
   function sortVouchers(vs: LexVoucherListItem[]): LexVoucherListItem[] {
@@ -457,7 +686,7 @@ export default function ImportPage() {
       const data: VoucherPage = await vr.json()
       setTotalPages(data.totalPages); setCurrentPage(data.currentPage)
 
-      let allVouchers = [...data.items]
+      const allVouchers = [...data.items]
       const ids = new Set(allVouchers.map(v => v.id))
 
       // Overdue Rechnungen SEPARAT (Lexoffice-API: overdue darf nicht kombiniert werden)
@@ -833,6 +1062,210 @@ export default function ImportPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Lexoffice Import</h1>
         <p className="text-sm text-slate-500 mt-0.5">Ausgangsbelege laden · Positionen prüfen · als Buchungen übernehmen</p>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-violet-200 bg-gradient-to-r from-violet-50 via-white to-sky-50 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium text-violet-700">
+              <Clock3 size={15} />
+              Lexoffice Sync
+            </div>
+            <h2 className="mt-1 text-xl font-semibold text-slate-900">Stündlicher Import mit Review-Queue</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Unsichere Fälle kannst du hier direkt korrigieren und danach manuell importieren.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={runSyncNow}
+            disabled={syncRunning || syncOverview?.configured === false}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw size={15} className={syncRunning ? 'animate-spin' : ''} />
+            {syncRunning ? 'Synchronisiert…' : 'Jetzt synchronisieren'}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-white/70 bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Offene Prüfung</p>
+            <p className="mt-1 text-2xl font-bold text-amber-600">{syncOverview?.counts.pendingReview ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-white/70 bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Importiert</p>
+            <p className="mt-1 text-2xl font-bold text-emerald-600">{syncOverview?.counts.autoImported ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-white/70 bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Duplikate</p>
+            <p className="mt-1 text-2xl font-bold text-slate-700">{syncOverview?.counts.duplicates ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-white/70 bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Letzter Lauf</p>
+            <p className="mt-1 text-sm font-semibold text-slate-800">
+              {syncOverview?.state.lastSuccessAt ? new Date(syncOverview.state.lastSuccessAt).toLocaleString('de-DE') : 'Noch kein erfolgreicher Lauf'}
+            </p>
+          </div>
+        </div>
+
+        {syncOverview?.configured === false && syncOverview.setupMessage && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {syncOverview.setupMessage}
+          </div>
+        )}
+
+        {syncFeedback && (
+          <div className={`mt-4 rounded-xl px-3 py-2 text-sm ${
+            syncFeedback.type === 'success'
+              ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border border-blue-200 bg-blue-50 text-blue-800'
+          }`}>
+            {syncFeedback.message}
+          </div>
+        )}
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white/80">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Offene Lexoffice-Fälle</p>
+              <p className="text-xs text-slate-500">Direkt hier bearbeiten und importieren.</p>
+            </div>
+            {syncLoading && <span className="text-xs text-slate-400">Lädt…</span>}
+          </div>
+          <div className="divide-y divide-slate-100">
+            {!syncLoading && (syncOverview?.items.length ?? 0) === 0 && (
+              <div className="px-4 py-4 text-sm text-slate-500">Keine offenen Lexoffice-Fälle.</div>
+            )}
+            {syncOverview?.items.map(item => {
+              const draftState = evaluateQueueDraft(item)
+              const bookingPositions = item.positions.filter(position => position.positionType === 'booking')
+              return (
+                <div key={item.voucherId} className="px-4 py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900">{item.voucherNumber || item.voucherId}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${confStyle[draftState.confidence]}`}>
+                          {draftState.confidence}
+                        </span>
+                        {item.isStorno && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Storno</span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-700">{item.contactName || 'Ohne Kontaktname'} · {formatCurrency(item.totalAmount)}</p>
+                      <p className="mt-1 text-xs text-slate-500">{draftState.message || item.reviewReason}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-slate-400">{new Date(item.lastSeenAt).toLocaleDateString('de-DE')}</span>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedQueueId(prev => prev === item.voucherId ? null : item.voucherId)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        {expandedQueueId === item.voucherId ? 'Bearbeitung schließen' : 'Bearbeiten'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => importQueueItem(item.voucherId)}
+                        disabled={!draftState.canImport || syncImportingId === item.voucherId}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {syncImportingId === item.voucherId ? 'Importiert…' : 'Manuell importieren'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {expandedQueueId === item.voucherId && (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="space-y-3">
+                        {item.positions.map((position, index) => (
+                          <div key={`${item.voucherId}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {position.positionType === 'cleaning' ? 'Endreinigung' : `Position ${index + 1}`}
+                                </p>
+                                <p className="text-xs text-slate-500">{position.rawText || 'Ohne Beschreibung'}</p>
+                              </div>
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${confStyle[position.confidence]}`}>
+                                {confLabel[position.confidence]}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                              {position.positionType === 'booking' ? (
+                                <>
+                                  <div>
+                                    <label className="mb-1 block text-xs font-medium text-slate-500">Objekt</label>
+                                    <PropertySearchInput
+                                      properties={properties}
+                                      locations={locations}
+                                      value={position.propertyId ?? ''}
+                                      onChange={value => updateQueuePosition(item.voucherId, index, { propertyId: value || undefined })}
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="mb-1 block text-xs font-medium text-slate-500">Check-in</label>
+                                      <input
+                                        type="date"
+                                        value={position.checkIn ?? ''}
+                                        onChange={event => updateQueuePosition(item.voucherId, index, { checkIn: event.target.value || undefined })}
+                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs font-medium text-slate-500">Check-out</label>
+                                      <input
+                                        type="date"
+                                        value={position.checkOut ?? ''}
+                                        onChange={event => updateQueuePosition(item.voucherId, index, { checkOut: event.target.value || undefined })}
+                                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                  </div>
+                                </>
+                              ) : (
+                                <div>
+                                  <label className="mb-1 block text-xs font-medium text-slate-500">Endreinigung zuordnen</label>
+                                  <select
+                                    value={position.assignedPropertyId ?? ''}
+                                    onChange={event => updateQueuePosition(item.voucherId, index, { assignedPropertyId: event.target.value || undefined })}
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    <option value="">Bitte wählen</option>
+                                    {bookingPositions.map(bookingPosition => (
+                                      <option key={`${item.voucherId}-${bookingPosition.index}`} value={bookingPosition.propertyId}>
+                                        {properties.find(property => property.id === bookingPosition.propertyId)?.shortCode ?? bookingPosition.propertyId}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs text-slate-500">{draftState.message}</p>
+                        <button
+                          type="button"
+                          onClick={() => saveQueueItem(item.voucherId)}
+                          disabled={syncSavingId === item.voucherId}
+                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Save size={15} />
+                          {syncSavingId === item.voucherId ? 'Speichert…' : 'Änderungen speichern'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Steps */}
@@ -1569,7 +2002,7 @@ export default function ImportPage() {
                             {/* Raw text */}
                             {pos.rawText && !isEditingThis && pos.status === 'pending' && (
                               <p className="text-xs text-slate-400 italic mt-1 truncate pl-8">
-                                „{pos.rawText}"
+                                &quot;{pos.rawText}&quot;
                               </p>
                             )}
 

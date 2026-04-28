@@ -1,0 +1,168 @@
+
+> buchungssystem@0.1.0 dev
+> next dev --webpack
+
+▲ Next.js 16.1.6 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.112:3000
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 2.4s
+○ Compiling / ...
+ GET / 200 in 15.0s (compile: 14.6s, render: 370ms)
+ GET /import 200 in 873ms (compile: 835ms, render: 38ms)
+ GET /import 200 in 29ms (compile: 6ms, render: 22ms)
+ GET /api/lexoffice/sync?limit=100 200 in 2.0s (compile: 1654ms, render: 381ms)
+ GET /api/lexoffice/sync?limit=100 200 in 2.0s (compile: 1656ms, render: 391ms)
+ POST /api/lexoffice/sync 200 in 2.3min (compile: 4ms, render: 2.3min)
+ GET /api/lexoffice/sync?limit=100 200 in 207ms (compile: 5ms, render: 201ms)
+ PATCH /api/lexoffice/queue/cf052fe3-9400-472b-b2fb-7a34d122a6be 200 in 1660ms (compile: 1162ms, render: 498ms)
+ PATCH /api/lexoffice/queue/cf052fe3-9400-472b-b2fb-7a34d122a6be 200 in 267ms (compile: 10ms, render: 257ms)
+ GET /buchungen 200 in 739ms (compile: 691ms, render: 49ms)
+ GET /api/lexoffice/sync 200 in 627ms (compile: 497ms, render: 130ms)
+ GET /api/lexoffice/sync 200 in 631ms (compile: 499ms, render: 133ms)
+ GET /import 200 in 105ms (compile: 63ms, render: 42ms)
+ GET /api/lexoffice/sync?limit=100 200 in 221ms (compile: 4ms, render: 217ms)
+ GET /api/lexoffice/sync?limit=100 200 in 315ms (compile: 5ms, render: 311ms)
+ GET / 200 in 38ms (compile: 14ms, render: 24ms)
+ GET /kalender 200 in 2.7s (compile: 2.6s, render: 129ms)
+ GET /import 200 in 42ms (compile: 19ms, render: 23ms)
+ GET /api/lexoffice/sync?limit=100 200 in 978ms (compile: 708ms, render: 270ms)
+ GET /api/lexoffice/sync?limit=100 200 in 986ms (compile: 710ms, render: 276ms)
+ GET /import 200 in 473ms (compile: 329ms, render: 144ms)
+ GET /import 200 in 163ms (compile: 24ms, render: 139ms)
+ GET /import 200 in 405ms (compile: 8ms, render: 397ms)
+ GET /import 200 in 288ms (compile: 120ms, render: 169ms)
+ GET /api/lexoffice/sync?limit=100 200 in 3.1s (compile: 2.6s, render: 545ms)
+ GET /kunden 200 in 1339ms (compile: 1288ms, render: 52ms)
+ GET /import 200 in 29ms (compile: 9ms, render: 20ms)
+ GET /api/lexoffice/sync?limit=100 200 in 255ms (compile: 58ms, render: 198ms)
+ GET /api/lexoffice/sync?limit=100 200 in 273ms (compile: 55ms, render: 217ms)
+ GET /import 200 in 121ms (compile: 25ms, render: 95ms)
+ PATCH /api/lexoffice/queue/cf052fe3-9400-472b-b2fb-7a34d122a6be 200 in 996ms (compile: 597ms, render: 398ms)
+ POST /api/lexoffice/queue/cf052fe3-9400-472b-b2fb-7a34d122a6be/import 200 in 11.2s (compile: 1160ms, render: 10.0s)
+ GET /api/lexoffice/sync?limit=100 200 in 187ms (compile: 5ms, render: 182ms)
+ GET /buchungen 200 in 106ms (compile: 35ms, render: 71ms)
+ GET /api/lexoffice/sync 200 in 132ms (compile: 5ms, render: 128ms)
+ GET /api/lexoffice/sync 200 in 141ms (compile: 6ms, render: 135ms)
+ GET /buchungen 200 in 144ms (compile: 110ms, render: 35ms)
+ GET /api/lexoffice/sync 200 in 893ms (compile: 687ms, render: 206ms)
+ GET /buchungen 200 in 93ms (compile: 60ms, render: 33ms)
+ GET /buchungen 200 in 68ms (compile: 36ms, render: 32ms)
+ GET /api/lexoffice/sync 200 in 186ms (compile: 46ms, render: 140ms)
+ GET /buchungen 200 in 181ms (compile: 91ms, render: 90ms)
+ GET /buchungen 200 in 178ms (compile: 107ms, render: 72ms)
+ GET /buchungen 200 in 267ms (compile: 182ms, render: 85ms)
+ GET /buchungen 200 in 301ms (compile: 17ms, render: 283ms)
+ GET /buchungen 200 in 383ms (compile: 117ms, render: 266ms)
+○ Compiling /_not-found ...
+ GET /buchungen 404 in 5.5s (compile: 5.3s, render: 205ms)
+ GET /buchungen 404 in 509ms (compile: 26ms, render: 483ms)
+ GET /buchungen 404 in 518ms (compile: 20ms, render: 498ms)
+○ Compiling /buchungen ...
+ GET /buchungen 200 in 5.8s (compile: 5.6s, render: 190ms)
+ GET /buchungen 200 in 229ms (compile: 30ms, render: 199ms)
+ GET /buchungen 200 in 858ms (compile: 73ms, render: 785ms)
+ GET /buchungen 200 in 785ms (compile: 23ms, render: 763ms)
+○ Compiling /api/bookings ...
+ GET /buchungen 200 in 321ms (compile: 166ms, render: 155ms)
+ GET /api/lexoffice/sync 200 in 7.3s (compile: 6.9s, render: 437ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 7.6s (compile: 6.9s, render: 684ms)
+○ Compiling /buchungen/smart ...
+ GET /buchungen/smart 200 in 9.2s (compile: 9.0s, render: 196ms)
+ GET /kalender 200 in 93ms (compile: 38ms, render: 55ms)
+ GET /kalender 200 in 149ms (compile: 10ms, render: 138ms)
+ GET /kalender 200 in 87ms (compile: 16ms, render: 71ms)
+ GET /mitarbeiter 200 in 2.7s (compile: 2.5s, render: 119ms)
+ GET /mitarbeiter 200 in 150ms (compile: 9ms, render: 140ms)
+ GET /mitarbeiter 200 in 596ms (compile: 51ms, render: 545ms)
+ GET /kalender 200 in 220ms (compile: 23ms, render: 197ms)
+ GET /buchungen 200 in 127ms (compile: 50ms, render: 77ms)
+○ Compiling /api/bookings ...
+ GET /buchungen 200 in 477ms (compile: 269ms, render: 208ms)
+ GET /api/lexoffice/sync 200 in 5.4s (compile: 4.7s, render: 685ms)
+ GET /api/lexoffice/sync 200 in 5.4s (compile: 4.7s, render: 688ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 5.6s (compile: 4.7s, render: 893ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 5.7s (compile: 4.7s, render: 1033ms)
+○ Compiling /analytics ...
+ GET /analytics 200 in 4.6s (compile: 4.4s, render: 211ms)
+ GET /analytics 200 in 101ms (compile: 37ms, render: 64ms)
+ GET / 200 in 3.4s (compile: 3.3s, render: 132ms)
+ GET / 200 in 62ms (compile: 9ms, render: 53ms)
+ GET /buchungen 200 in 97ms (compile: 43ms, render: 54ms)
+ GET /api/lexoffice/sync 200 in 4.1s (compile: 3.5s, render: 619ms)
+ GET /api/lexoffice/sync 200 in 4.1s (compile: 3.5s, render: 622ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 4.3s (compile: 3.5s, render: 848ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 4.5s (compile: 3.5s, render: 1024ms)
+ GET / 200 in 264ms (compile: 164ms, render: 101ms)
+ GET /buchungen 200 in 101ms (compile: 39ms, render: 62ms)
+ GET /api/lexoffice/sync 200 in 263ms (compile: 12ms, render: 251ms)
+ GET /api/lexoffice/sync 200 in 267ms (compile: 10ms, render: 257ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 514ms (compile: 53ms, render: 461ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 719ms (compile: 57ms, render: 662ms)
+ GET /buchungen 200 in 413ms (compile: 261ms, render: 152ms)
+ GET /buchungen 200 in 587ms (compile: 454ms, render: 133ms)
+ GET /buchungen 200 in 373ms (compile: 243ms, render: 129ms)
+ GET /buchungen 200 in 216ms (compile: 123ms, render: 93ms)
+ GET /buchungen 200 in 257ms (compile: 142ms, render: 115ms)
+ GET /buchungen 200 in 218ms (compile: 121ms, render: 97ms)
+ GET /buchungen 200 in 679ms (compile: 52ms, render: 628ms)
+○ Compiling /api/bookings ...
+ GET /buchungen 200 in 283ms (compile: 198ms, render: 84ms)
+ GET /api/lexoffice/sync 200 in 5.4s (compile: 4.9s, render: 490ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 5.5s (compile: 4.9s, render: 591ms)
+ GET /kalender 200 in 1092ms (compile: 1031ms, render: 61ms)
+ GET /kalender 200 in 36ms (compile: 5ms, render: 31ms)
+ GET /buchungen 200 in 33ms (compile: 10ms, render: 23ms)
+ GET /api/lexoffice/sync 200 in 327ms (compile: 86ms, render: 242ms)
+ GET /api/lexoffice/sync 200 in 350ms (compile: 92ms, render: 258ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 509ms (compile: 127ms, render: 382ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 608ms (compile: 129ms, render: 479ms)
+ GET /buchungen/smart 200 in 1229ms (compile: 1181ms, render: 48ms)
+ GET /buchungen/smart 200 in 37ms (compile: 6ms, render: 31ms)
+ GET /objekte 200 in 2.6s (compile: 2.6s, render: 48ms)
+ GET /objekte 200 in 40ms (compile: 5ms, render: 34ms)
+ GET /objekte 200 in 655ms (compile: 582ms, render: 73ms)
+ GET /objekte 200 in 181ms (compile: 114ms, render: 67ms)
+⨯ ./src/app/analytics/page.tsx
+Module parse failed: Identifier 'chartBase' has already been declared (302:10)
+|     const totalBeds = analyticsProperties.filter((p)=>p.active).reduce((s, p)=>s + p.beds, 0);
+|     // ── Chart: Kontext ohne Monat-Filter ────────────────────────────────────────
+>     const chartBase = selectedPropertyId ? validBookings.filter((b)=>b.propertyId === selectedPropertyId) : selectedLocationId ? validBookings.filter((b)=>allProperties.find((p)=>p.id === b.propertyId)?.locationId === selectedLocationId) : validBookings;
+|     const months12 = Array.from({
+|         length: 12
+
+Import trace for requested module:
+./src/app/analytics/page.tsx
+⨯ ./src/app/analytics/page.tsx
+Module parse failed: Identifier 'chartBase' has already been declared (302:10)
+|     const totalBeds = analyticsProperties.filter((p)=>p.active).reduce((s, p)=>s + p.beds, 0);
+|     // ── Chart: Kontext ohne Monat-Filter ────────────────────────────────────────
+>     const chartBase = selectedPropertyId ? validBookings.filter((b)=>b.propertyId === selectedPropertyId) : selectedLocationId ? validBookings.filter((b)=>allProperties.find((p)=>p.id === b.propertyId)?.locationId === selectedLocationId) : validBookings;
+|     const months12 = Array.from({
+|         length: 12
+
+Import trace for requested module:
+./src/app/analytics/page.tsx
+ GET /objekte 200 in 96ms (compile: 65ms, render: 30ms)
+ GET /objekte 200 in 169ms (compile: 106ms, render: 63ms)
+ GET /objekte 200 in 154ms (compile: 55ms, render: 99ms)
+ GET /objekte 200 in 108ms (compile: 57ms, render: 51ms)
+ GET /objekte 200 in 146ms (compile: 68ms, render: 77ms)
+ GET /objekte 200 in 81ms (compile: 48ms, render: 33ms)
+ GET /objekte 200 in 109ms (compile: 56ms, render: 54ms)
+ GET /objekte 200 in 254ms (compile: 6ms, render: 248ms)
+ GET /buchungen 200 in 39ms (compile: 13ms, render: 26ms)
+○ Compiling /api/bookings ...
+ GET /buchungen 200 in 200ms (compile: 76ms, render: 124ms)
+ GET /api/lexoffice/sync 200 in 4.2s (compile: 3.8s, render: 361ms)
+ GET /api/lexoffice/sync 200 in 4.2s (compile: 3.8s, render: 396ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 4.4s (compile: 3.8s, render: 573ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 4.5s (compile: 3.8s, render: 667ms)
+ GET /buchungen 200 in 213ms (compile: 172ms, render: 41ms)
+ GET /buchungen 200 in 233ms (compile: 172ms, render: 61ms)
+ GET /buchungen 200 in 288ms (compile: 209ms, render: 79ms)
+ GET /buchungen 200 in 288ms (compile: 5ms, render: 283ms)
+ GET /api/lexoffice/sync 200 in 2.8s (compile: 2.3s, render: 500ms)
+ GET /api/bookings?search=&statusFilter=all&locationFilter=all&sortBy=invoiceDesc&viewMode=invoices&page=1&pageSize=50 200 in 3.0s (compile: 2.3s, render: 662ms)

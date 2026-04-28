@@ -78,16 +78,58 @@ function mapBooking(r: Record<string, unknown>): Booking {
   }
 }
 
+type EntityCache<T> = {
+  data: T[] | null
+  promise: Promise<T[]> | null
+}
+
+const locationsCache: EntityCache<Location> = { data: null, promise: null }
+const propertiesCache: EntityCache<Property> = { data: null, promise: null }
+const customersCache: EntityCache<Customer> = { data: null, promise: null }
+const bookingsCache: EntityCache<Booking> = { data: null, promise: null }
+
+async function loadCached<T>(cache: EntityCache<T>, fetcher: () => Promise<T[]>): Promise<T[]> {
+  if (cache.data) {
+    return cache.data
+  }
+
+  if (cache.promise) {
+    return cache.promise
+  }
+
+  cache.promise = fetcher()
+    .then(data => {
+      cache.data = data
+      return data
+    })
+    .finally(() => {
+      cache.promise = null
+    })
+
+  return cache.promise
+}
+
+function setCacheData<T>(cache: EntityCache<T>, data: T[]) {
+  cache.data = data
+}
+
 // ─── useLocations ─────────────────────────────────────────────────────────────
 
 export function useLocations() {
-  const [locations, setLocations] = useState<Location[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [locations, setLocations] = useState<Location[]>(() => locationsCache.data ?? [])
+  const [loading, setLoading]     = useState(locationsCache.data === null)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('locations').select('*').order('name')
-    if (!error && data) setLocations(data.map(mapLocation))
-    setLoading(false)
+    try {
+      const nextLocations = await loadCached(locationsCache, async () => {
+        const { data, error } = await supabase.from('locations').select('*').order('name')
+        if (error) throw error
+        return (data ?? []).map(mapLocation)
+      })
+      setLocations(nextLocations)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -98,7 +140,11 @@ export function useLocations() {
     const { data, error } = await supabase.from('locations').insert(row).select().single()
     if (error) throw error
     const newLoc = mapLocation(data)
-    setLocations(prev => [...prev, newLoc])
+    setLocations(prev => {
+      const next = [...prev, newLoc]
+      setCacheData(locationsCache, next)
+      return next
+    })
     return newLoc
   }
 
@@ -107,10 +153,13 @@ export function useLocations() {
     const row = { id: normalizedLoc.id, name: normalizedLoc.name, city: normalizedLoc.city, country: normalizedLoc.country, color: normalizedLoc.color }
     const { error } = await supabase.from('locations').upsert(row)
     if (error) throw error
-    setLocations(prev => prev.some(l => l.id === loc.id)
-      ? prev.map(l => l.id === loc.id ? normalizedLoc : l)
-      : [...prev, normalizedLoc]
-    )
+    setLocations(prev => {
+      const next = prev.some(l => l.id === loc.id)
+        ? prev.map(l => l.id === loc.id ? normalizedLoc : l)
+        : [...prev, normalizedLoc]
+      setCacheData(locationsCache, next)
+      return next
+    })
   }
 
   const update = async (id: string, data: Partial<Location>): Promise<void> => {
@@ -121,20 +170,29 @@ export function useLocations() {
     if (data.color   !== undefined) row.color   = data.color
     const { error } = await supabase.from('locations').update(row).eq('id', id)
     if (error) throw error
-    setLocations(prev => prev.map(l => l.id === id
-      ? { ...l, ...data, name: data.name !== undefined ? normalizeLocationName(data.name) : l.name }
-      : l
-    ))
+    setLocations(prev => {
+      const next = prev.map(l => l.id === id
+        ? { ...l, ...data, name: data.name !== undefined ? normalizeLocationName(data.name) : l.name }
+        : l
+      )
+      setCacheData(locationsCache, next)
+      return next
+    })
   }
 
   const remove = async (id: string): Promise<void> => {
     const { error } = await supabase.from('locations').delete().eq('id', id)
     if (error) throw error
-    setLocations(prev => prev.filter(l => l.id !== id))
+    setLocations(prev => {
+      const next = prev.filter(l => l.id !== id)
+      setCacheData(locationsCache, next)
+      return next
+    })
   }
 
   const clearAll = async (): Promise<void> => {
     await supabase.from('locations').delete().neq('id', '')
+    setCacheData(locationsCache, [])
     setLocations([])
   }
 
@@ -144,13 +202,20 @@ export function useLocations() {
 // ─── useProperties ────────────────────────────────────────────────────────────
 
 export function useProperties() {
-  const [properties, setProperties] = useState<Property[]>([])
-  const [loading, setLoading]       = useState(true)
+  const [properties, setProperties] = useState<Property[]>(() => propertiesCache.data ?? [])
+  const [loading, setLoading]       = useState(propertiesCache.data === null)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('properties').select('*').order('name')
-    if (!error && data) setProperties(data.map(mapProperty))
-    setLoading(false)
+    try {
+      const nextProperties = await loadCached(propertiesCache, async () => {
+        const { data, error } = await supabase.from('properties').select('*').order('name')
+        if (error) throw error
+        return (data ?? []).map(mapProperty)
+      })
+      setProperties(nextProperties)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -175,7 +240,11 @@ export function useProperties() {
     const { data, error } = await supabase.from('properties').insert(row).select().single()
     if (error) throw error
     const newProp = mapProperty(data)
-    setProperties(prev => [...prev, newProp])
+    setProperties(prev => {
+      const next = [...prev, newProp]
+      setCacheData(propertiesCache, next)
+      return next
+    })
     return newProp
   }
 
@@ -197,10 +266,13 @@ export function useProperties() {
     }
     const { error } = await supabase.from('properties').upsert(row)
     if (error) throw error
-    setProperties(prev => prev.some(p => p.id === prop.id)
-      ? prev.map(p => p.id === prop.id ? prop : p)
-      : [...prev, prop]
-    )
+    setProperties(prev => {
+      const next = prev.some(p => p.id === prop.id)
+        ? prev.map(p => p.id === prop.id ? prop : p)
+        : [...prev, prop]
+      setCacheData(propertiesCache, next)
+      return next
+    })
   }
 
   const update = async (id: string, data: Partial<Property>): Promise<void> => {
@@ -219,17 +291,26 @@ export function useProperties() {
     if (data.active             !== undefined) row.active              = data.active
     const { error } = await supabase.from('properties').update(row).eq('id', id)
     if (error) throw error
-    setProperties(prev => prev.map(p => p.id === id ? { ...p, ...data } : p))
+    setProperties(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, ...data } : p)
+      setCacheData(propertiesCache, next)
+      return next
+    })
   }
 
   const remove = async (id: string): Promise<void> => {
     const { error } = await supabase.from('properties').delete().eq('id', id)
     if (error) throw error
-    setProperties(prev => prev.filter(p => p.id !== id))
+    setProperties(prev => {
+      const next = prev.filter(p => p.id !== id)
+      setCacheData(propertiesCache, next)
+      return next
+    })
   }
 
   const clearAll = async (): Promise<void> => {
     await supabase.from('properties').delete().neq('id', '')
+    setCacheData(propertiesCache, [])
     setProperties([])
   }
 
@@ -239,13 +320,20 @@ export function useProperties() {
 // ─── useCustomers ─────────────────────────────────────────────────────────────
 
 export function useCustomers() {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [customers, setCustomers] = useState<Customer[]>(() => customersCache.data ?? [])
+  const [loading, setLoading]     = useState(customersCache.data === null)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('customers').select('*').order('company_name')
-    if (!error && data) setCustomers(data.map(mapCustomer))
-    setLoading(false)
+    try {
+      const nextCustomers = await loadCached(customersCache, async () => {
+        const { data, error } = await supabase.from('customers').select('*').order('company_name')
+        if (error) throw error
+        return (data ?? []).map(mapCustomer)
+      })
+      setCustomers(nextCustomers)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -272,7 +360,11 @@ export function useCustomers() {
     const { data, error } = await supabase.from('customers').insert(row).select().single()
     if (error) throw error
     const newC = mapCustomer(data)
-    setCustomers(prev => [...prev, newC])
+    setCustomers(prev => {
+      const next = [...prev, newC]
+      setCacheData(customersCache, next)
+      return next
+    })
     return newC
   }
 
@@ -295,10 +387,13 @@ export function useCustomers() {
     }
     const { error } = await supabase.from('customers').upsert(row)
     if (error) throw error
-    setCustomers(prev => prev.some(x => x.id === c.id)
-      ? prev.map(x => x.id === c.id ? c : x)
-      : [...prev, c]
-    )
+    setCustomers(prev => {
+      const next = prev.some(x => x.id === c.id)
+        ? prev.map(x => x.id === c.id ? c : x)
+        : [...prev, c]
+      setCacheData(customersCache, next)
+      return next
+    })
   }
 
   const update = async (id: string, data: Partial<Customer>): Promise<void> => {
@@ -317,17 +412,26 @@ export function useCustomers() {
     if (data.notes              !== undefined) row.notes                = data.notes
     const { error } = await supabase.from('customers').update(row).eq('id', id)
     if (error) throw error
-    setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...data } : c))
+    setCustomers(prev => {
+      const next = prev.map(c => c.id === id ? { ...c, ...data } : c)
+      setCacheData(customersCache, next)
+      return next
+    })
   }
 
   const remove = async (id: string): Promise<void> => {
     const { error } = await supabase.from('customers').delete().eq('id', id)
     if (error) throw error
-    setCustomers(prev => prev.filter(c => c.id !== id))
+    setCustomers(prev => {
+      const next = prev.filter(c => c.id !== id)
+      setCacheData(customersCache, next)
+      return next
+    })
   }
 
   const clearAll = async (): Promise<void> => {
     await supabase.from('customers').delete().neq('id', '')
+    setCacheData(customersCache, [])
     setCustomers([])
   }
 
@@ -337,13 +441,20 @@ export function useCustomers() {
 // ─── useBookings ──────────────────────────────────────────────────────────────
 
 export function useBookings() {
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [bookings, setBookings] = useState<Booking[]>(() => bookingsCache.data ?? [])
+  const [loading, setLoading]   = useState(bookingsCache.data === null)
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('bookings').select('*').order('check_in', { ascending: false })
-    if (!error && data) setBookings(data.map(mapBooking))
-    setLoading(false)
+    try {
+      const nextBookings = await loadCached(bookingsCache, async () => {
+        const { data, error } = await supabase.from('bookings').select('*').order('check_in', { ascending: false })
+        if (error) throw error
+        return (data ?? []).map(mapBooking)
+      })
+      setBookings(nextBookings)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -382,7 +493,11 @@ export function useBookings() {
     const { data, error } = await supabase.from('bookings').insert(row).select().single()
     if (error) throw error
     const newB = mapBooking(data)
-    setBookings(prev => [newB, ...prev])
+    setBookings(prev => {
+      const next = [newB, ...prev]
+      setCacheData(bookingsCache, next)
+      return next
+    })
     return newB
   }
 
@@ -411,10 +526,13 @@ export function useBookings() {
     }
     const { error } = await supabase.from('bookings').upsert(row)
     if (error) throw error
-    setBookings(prev => prev.some(x => x.id === b.id)
-      ? prev.map(x => x.id === b.id ? b : x)
-      : [b, ...prev]
-    )
+    setBookings(prev => {
+      const next = prev.some(x => x.id === b.id)
+        ? prev.map(x => x.id === b.id ? b : x)
+        : [b, ...prev]
+      setCacheData(bookingsCache, next)
+      return next
+    })
   }
 
   const update = async (id: string, data: Partial<Booking>): Promise<void> => {
@@ -438,17 +556,26 @@ export function useBookings() {
     if (data.source               !== undefined) row.source                 = data.source
     const { error } = await supabase.from('bookings').update(row).eq('id', id)
     if (error) throw error
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, ...data, updatedAt: now } : b))
+    setBookings(prev => {
+      const next = prev.map(b => b.id === id ? { ...b, ...data, updatedAt: now } : b)
+      setCacheData(bookingsCache, next)
+      return next
+    })
   }
 
   const remove = async (id: string): Promise<void> => {
     const { error } = await supabase.from('bookings').delete().eq('id', id)
     if (error) throw error
-    setBookings(prev => prev.filter(b => b.id !== id))
+    setBookings(prev => {
+      const next = prev.filter(b => b.id !== id)
+      setCacheData(bookingsCache, next)
+      return next
+    })
   }
 
   const clearAll = async (): Promise<void> => {
     await supabase.from('bookings').delete().neq('id', '')
+    setCacheData(bookingsCache, [])
     setBookings([])
   }
 
@@ -461,5 +588,9 @@ export async function clearAllData() {
   await supabase.from('properties').delete().neq('id', '')
   await supabase.from('customers').delete().neq('id', '')
   await supabase.from('locations').delete().neq('id', '')
+  setCacheData(bookingsCache, [])
+  setCacheData(propertiesCache, [])
+  setCacheData(customersCache, [])
+  setCacheData(locationsCache, [])
   window.location.reload()
 }

@@ -22,6 +22,18 @@ export default function AnalyticsPage() {
   const { properties: allProperties } = useProperties()
   const { locations: allLocations } = useLocations()
   const { customers: allCustomers } = useCustomers()
+  const propertiesById = useMemo(() => new Map(allProperties.map(property => [property.id, property])), [allProperties])
+  const locationsById = useMemo(() => new Map(allLocations.map(location => [location.id, location])), [allLocations])
+  const customersById = useMemo(() => new Map(allCustomers.map(customer => [customer.id, customer])), [allCustomers])
+  const propertiesByLocationId = useMemo(() => {
+    const map = new Map<string, typeof allProperties>()
+    for (const property of allProperties) {
+      const list = map.get(property.locationId) ?? []
+      list.push(property)
+      map.set(property.locationId, list)
+    }
+    return map
+  }, [allProperties])
 
   // ── View-Mode ───────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<'revenue' | 'occupancy'>('revenue')
@@ -44,33 +56,80 @@ export default function AnalyticsPage() {
     selectedLocationId ? 'properties' :
     'locations'
 
-  const selectedLocation = allLocations.find(l => l.id === selectedLocationId)
-  const selectedProperty = allProperties.find(p => p.id === selectedPropertyId)
+  const selectedLocation = selectedLocationId ? locationsById.get(selectedLocationId) ?? null : null
+  const selectedProperty = selectedPropertyId ? propertiesById.get(selectedPropertyId) ?? null : null
 
   // ── Basis: Stornos ausschließen ─────────────────────────────────────────────
-  const validBookings = allBookings.filter(b => b.status !== 'storniert')
+  const validBookings = useMemo(() => allBookings.filter(b => b.status !== 'storniert'), [allBookings])
+  const validBookingPropertyIds = useMemo(() => new Set(validBookings.map(booking => booking.propertyId)), [validBookings])
 
   // ── Analytics-Filter: Nur Standorte mit Buchungsdaten (z.B. Mülheim raus) ─
-  const analyticsLocations = allLocations.filter(l => {
-    const props = allProperties.filter(p => p.locationId === l.id)
-    return props.some(p => p.active) && validBookings.some(b => props.some(p2 => p2.id === b.propertyId))
-  })
-  const analyticsLocIds = new Set(analyticsLocations.map(l => l.id))
-  const analyticsProperties = allProperties.filter(p => analyticsLocIds.has(p.locationId))
+  const analyticsLocations = useMemo(() => allLocations.filter(location => {
+    const props = propertiesByLocationId.get(location.id) ?? []
+    return props.some(property => property.active) && props.some(property => validBookingPropertyIds.has(property.id))
+  }), [allLocations, propertiesByLocationId, validBookingPropertyIds])
+  const analyticsLocIds = useMemo(() => new Set(analyticsLocations.map(location => location.id)), [analyticsLocations])
+  const analyticsProperties = useMemo(() => allProperties.filter(property => analyticsLocIds.has(property.locationId)), [allProperties, analyticsLocIds])
+  const analyticsPropertyIds = useMemo(() => new Set(analyticsProperties.map(property => property.id)), [analyticsProperties])
 
   // ── Monat-Filter anwenden ───────────────────────────────────────────────────
-  const monthFilteredBookings = selectedMonth === 'all'
-    ? validBookings
-    : validBookings.filter(b => b.checkIn.slice(0, 7) === selectedMonth)
+  const monthFilteredBookings = useMemo(() => (
+    selectedMonth === 'all'
+      ? validBookings
+      : validBookings.filter(b => b.checkIn.slice(0, 7) === selectedMonth)
+  ), [selectedMonth, validBookings])
 
   // ── Kontext-Filter (Drill-Down) ─────────────────────────────────────────────
-  const contextBookings = selectedPropertyId
-    ? monthFilteredBookings.filter(b => b.propertyId === selectedPropertyId)
-    : selectedLocationId
-      ? monthFilteredBookings.filter(b =>
-          allProperties.find(p => p.id === b.propertyId)?.locationId === selectedLocationId
-        )
-      : monthFilteredBookings
+  const contextBookings = useMemo(() => {
+    if (selectedPropertyId) return monthFilteredBookings.filter(b => b.propertyId === selectedPropertyId)
+    if (selectedLocationId) return monthFilteredBookings.filter(b => propertiesById.get(b.propertyId)?.locationId === selectedLocationId)
+    return monthFilteredBookings
+  }, [monthFilteredBookings, propertiesById, selectedLocationId, selectedPropertyId])
+  const contextBookingsByPropertyId = useMemo(() => {
+    const map = new Map<string, typeof contextBookings>()
+    for (const booking of contextBookings) {
+      const list = map.get(booking.propertyId) ?? []
+      list.push(booking)
+      map.set(booking.propertyId, list)
+    }
+    return map
+  }, [contextBookings])
+  const contextBookingsByLocationId = useMemo(() => {
+    const map = new Map<string, typeof contextBookings>()
+    for (const booking of contextBookings) {
+      const locationId = propertiesById.get(booking.propertyId)?.locationId
+      if (!locationId) continue
+      const list = map.get(locationId) ?? []
+      list.push(booking)
+      map.set(locationId, list)
+    }
+    return map
+  }, [contextBookings, propertiesById])
+  const contextBookingsByCustomerId = useMemo(() => {
+    const map = new Map<string, typeof contextBookings>()
+    for (const booking of contextBookings) {
+      const list = map.get(booking.customerId) ?? []
+      list.push(booking)
+      map.set(booking.customerId, list)
+    }
+    return map
+  }, [contextBookings])
+  const chartBase = useMemo(() => {
+    if (selectedPropertyId) return validBookings.filter(b => b.propertyId === selectedPropertyId)
+    if (selectedLocationId) return validBookings.filter(b => propertiesById.get(b.propertyId)?.locationId === selectedLocationId)
+    return validBookings
+  }, [propertiesById, selectedLocationId, selectedPropertyId, validBookings])
+  const chartBaseByMonth = useMemo(() => {
+    const map = new Map<string, typeof chartBase>()
+    for (const booking of chartBase) {
+      const key = booking.checkIn.slice(0, 7)
+      const list = map.get(key) ?? []
+      list.push(booking)
+      map.set(key, list)
+    }
+    return map
+  }, [chartBase])
+  const monthsWithData = useMemo(() => new Set(validBookings.map(booking => booking.checkIn.slice(0, 7))), [validBookings])
 
   // ── Verfügbare Monate (letzte 24) ───────────────────────────────────────────
   const last24Months = Array.from({ length: 24 }, (_, i) => {
@@ -79,7 +138,7 @@ export default function AnalyticsPage() {
     return {
       value: key,
       label: format(d, 'MMM yy', { locale: de }),
-      hasData: validBookings.some(b => b.checkIn.startsWith(key)),
+      hasData: monthsWithData.has(key),
     }
   })
 
@@ -127,31 +186,23 @@ export default function AnalyticsPage() {
   const totalBeds     = analyticsProperties.filter(p => p.active).reduce((s, p) => s + p.beds, 0)
 
   // ── Chart: Kontext ohne Monat-Filter ────────────────────────────────────────
-  const chartBase = selectedPropertyId
-    ? validBookings.filter(b => b.propertyId === selectedPropertyId)
-    : selectedLocationId
-      ? validBookings.filter(b =>
-          allProperties.find(p => p.id === b.propertyId)?.locationId === selectedLocationId
-        )
-      : validBookings
-
   const months12 = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1)
     return { label: format(d, 'MMM yy', { locale: de }), key: format(d, 'yyyy-MM') }
   })
   const monthlyData = months12.map(m => ({
     ...m,
-    revenue:   chartBase.filter(b => b.checkIn.startsWith(m.key)).reduce((s, b) => s + b.totalPrice, 0),
-    bedNights: chartBase.filter(b => b.checkIn.startsWith(m.key)).reduce((s, b) => s + b.bedsBooked * b.nights, 0),
-    bookings:  chartBase.filter(b => b.checkIn.startsWith(m.key)).length,
+    revenue:   (chartBaseByMonth.get(m.key) ?? []).reduce((s, b) => s + b.totalPrice, 0),
+    bedNights: (chartBaseByMonth.get(m.key) ?? []).reduce((s, b) => s + b.bedsBooked * b.nights, 0),
+    bookings:  (chartBaseByMonth.get(m.key) ?? []).length,
   }))
   const maxMonthRevenue = Math.max(...monthlyData.map(m => m.revenue), 1)
 
   // ── Standort-Daten (Level 0) ────────────────────────────────────────────────
   const totalLocRevenue = contextBookings.reduce((s, b) => s + b.totalPrice, 1)
   const locData = analyticsLocations.map(l => {
-    const props = analyticsProperties.filter(p => p.locationId === l.id)
-    const bks   = contextBookings.filter(b => props.some(p => p.id === b.propertyId))
+    const props = (propertiesByLocationId.get(l.id) ?? []).filter(p => analyticsPropertyIds.has(p.id))
+    const bks   = contextBookingsByLocationId.get(l.id) ?? []
     return {
       ...l,
       revenue:     bks.reduce((s, b) => s + b.totalPrice, 0),
@@ -166,10 +217,10 @@ export default function AnalyticsPage() {
 
   // ── Objekt-Daten (Level 1) ──────────────────────────────────────────────────
   const propsForLocation = selectedLocationId
-    ? allProperties.filter(p => p.locationId === selectedLocationId)
+    ? (propertiesByLocationId.get(selectedLocationId) ?? [])
     : []
   const propData = propsForLocation.map(p => {
-    const bks = contextBookings.filter(b => b.propertyId === p.id)
+    const bks = contextBookingsByPropertyId.get(p.id) ?? []
     return {
       ...p,
       revenue:     bks.reduce((s, b) => s + b.totalPrice, 0),
@@ -184,12 +235,15 @@ export default function AnalyticsPage() {
   const propertyBookings = [...contextBookings].sort((a, b) => b.checkIn.localeCompare(a.checkIn))
 
   // ── Top Auftraggeber ────────────────────────────────────────────────────────
-  const custData = allCustomers.map(c => ({
-    ...c,
-    revenue:   contextBookings.filter(b => b.customerId === c.id).reduce((s, b) => s + b.totalPrice, 0),
-    bookings:  contextBookings.filter(b => b.customerId === c.id).length,
-    bedNights: contextBookings.filter(b => b.customerId === c.id).reduce((s, b) => s + b.bedsBooked * b.nights, 0),
-  })).filter(c => c.bookings > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
+  const custData = allCustomers.map(c => {
+    const bookings = contextBookingsByCustomerId.get(c.id) ?? []
+    return {
+      ...c,
+      revenue:   bookings.reduce((s, b) => s + b.totalPrice, 0),
+      bookings:  bookings.length,
+      bedNights: bookings.reduce((s, b) => s + b.bedsBooked * b.nights, 0),
+    }
+  }).filter(c => c.bookings > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
 
   // ═══════════════════════════════════════════════════════════════════════════════
   //  OCCUPANCY-Berechnungen
@@ -249,18 +303,18 @@ export default function AnalyticsPage() {
     if (viewMode !== 'occupancy' || drillLevel !== 'locations') return []
     const entities = analyticsLocations.map(l => ({
       id: l.id,
-      properties: analyticsProperties.filter(p => p.locationId === l.id),
+      properties: (propertiesByLocationId.get(l.id) ?? []).filter(property => analyticsPropertyIds.has(property.id)),
     }))
     return calcOccupancyByEntity(occupancySelectedRange.start, occupancySelectedRange.end, entities, allBookings)
-  }, [viewMode, drillLevel, analyticsLocations, analyticsProperties, allBookings, occupancySelectedRange])
+  }, [viewMode, drillLevel, analyticsLocations, analyticsPropertyIds, allBookings, occupancySelectedRange, propertiesByLocationId])
 
   // Auslastung pro Objekt (Level 1) — NUR für den gewählten Zeitraum
   const occupancyByProperty = useMemo(() => {
     if (viewMode !== 'occupancy' || drillLevel !== 'properties') return []
-    const props = analyticsProperties.filter(p => p.locationId === selectedLocationId)
+    const props = selectedLocationId ? (propertiesByLocationId.get(selectedLocationId) ?? []).filter(property => analyticsPropertyIds.has(property.id)) : []
     const entities = props.map(p => ({ id: p.id, properties: [p] }))
     return calcOccupancyByEntity(occupancySelectedRange.start, occupancySelectedRange.end, entities, allBookings)
-  }, [viewMode, drillLevel, selectedLocationId, analyticsProperties, allBookings, occupancySelectedRange])
+  }, [viewMode, drillLevel, selectedLocationId, analyticsPropertyIds, allBookings, occupancySelectedRange, propertiesByLocationId])
 
   // KPIs — NUR für den gewählten Zeitraum
   const occKpis = useMemo(() => {
@@ -705,7 +759,7 @@ export default function AnalyticsPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-5">
                   {propData.map(p => {
-                    const loc = allLocations.find(l => l.id === p.locationId)
+                    const loc = locationsById.get(p.locationId)
                     return (
                       <button
                         key={p.id}
@@ -829,7 +883,7 @@ export default function AnalyticsPage() {
                     </thead>
                     <tbody>
                       {propertyBookings.map(b => {
-                        const cust = allCustomers.find(c => c.id === b.customerId)
+                        const cust = customersById.get(b.customerId)
                         return (
                           <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50">
                             <td className="py-2.5">
