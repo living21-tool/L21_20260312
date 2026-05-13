@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import { useL21Workspace } from '@/lib/l21-workspace'
 import { L21Conversation, L21TaskStatus } from '@/lib/l21-types'
 import { useLocations, useProperties } from '@/lib/store'
@@ -13,7 +12,6 @@ import {
   Archive,
   CheckCircle2,
   ClipboardList,
-  LogIn,
   MessageSquare,
   MessageSquareMore,
   PlusSquare,
@@ -387,19 +385,13 @@ function MeinL21PageContent() {
     return (
       <div className="flex min-h-[70vh] items-center justify-center p-6">
         <div className="max-w-md rounded-[28px] border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-            <LogIn size={24} />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+            <UserRound size={24} />
           </div>
-          <h1 className="mt-5 text-2xl font-semibold text-slate-900">Anmeldung erforderlich</h1>
+          <h1 className="mt-5 text-2xl font-semibold text-slate-900">Profil nicht gefunden</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500">
-            Aufgaben und Mitarbeiter-Chats laufen ueber die angemeldeten Benutzerkonten.
+            Dein Benutzerkonto hat noch kein Mitarbeiterprofil. Ein Admin muss dein Profil in der Mitarbeiterverwaltung anlegen.
           </p>
-          <Link
-            href="/login"
-            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
-          >
-            Jetzt anmelden
-          </Link>
         </div>
       </div>
     )

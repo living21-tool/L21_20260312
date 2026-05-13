@@ -18,6 +18,8 @@ function mapProfile(row: Record<string, unknown>): EmployeeProfile {
     id: row.id as string,
     fullName,
     email: (row.email as string | null) ?? '',
+    phone: (row.phone as string | null) ?? '',
+    notes: (row.notes as string | null) ?? '',
     role: row.role as EmployeeProfile['role'],
     avatarColor: (row.avatar_color as string | null) ?? undefined,
     initials: fullName

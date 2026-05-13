@@ -8,11 +8,24 @@ export interface EmployeeProfile {
   id: string
   fullName: string
   email: string
+  phone: string
+  notes: string
   role: EmployeeRole
   avatarColor?: string
   initials?: string
   isActive: boolean
   createdAt?: string
+}
+
+export type AssignmentRoleType = 'hausmeister' | 'reinigung' | 'verwaltung'
+
+export interface EmployeeAssignment {
+  id: string
+  profileId: string
+  propertyId: string
+  roleType: AssignmentRoleType
+  notes: string
+  createdAt: string
 }
 
 export interface L21Task {

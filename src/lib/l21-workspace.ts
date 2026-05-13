@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
-import { EmployeeProfile, L21Conversation, L21Message, L21Task, L21TaskComment, L21TaskStatus } from './l21-types'
+import { EmployeeAssignment, EmployeeProfile, L21Conversation, L21Message, L21Task, L21TaskComment, L21TaskStatus } from './l21-types'
 import { useAuthProfile } from './auth-client'
 
 function mapProfile(row: Record<string, unknown>): EmployeeProfile {
@@ -12,6 +12,8 @@ function mapProfile(row: Record<string, unknown>): EmployeeProfile {
     id: row.id as string,
     fullName,
     email: (row.email as string | null) ?? '',
+    phone: (row.phone as string | null) ?? '',
+    notes: (row.notes as string | null) ?? '',
     role: row.role as EmployeeProfile['role'],
     avatarColor: (row.avatar_color as string | null) ?? undefined,
     initials: fullName
@@ -22,6 +24,17 @@ function mapProfile(row: Record<string, unknown>): EmployeeProfile {
       .toUpperCase(),
     isActive: Boolean(row.is_active),
     createdAt: (row.created_at as string | null) ?? undefined,
+  }
+}
+
+function mapAssignment(row: Record<string, unknown>): EmployeeAssignment {
+  return {
+    id: row.id as string,
+    profileId: row.profile_id as string,
+    propertyId: row.property_id as string,
+    roleType: row.role_type as EmployeeAssignment['roleType'],
+    notes: (row.notes as string | null) ?? '',
+    createdAt: row.created_at as string,
   }
 }
 
@@ -92,6 +105,7 @@ export function useL21Workspace() {
   const auth = useAuthProfile()
   const [loading, setLoading] = useState(true)
   const [profiles, setProfiles] = useState<EmployeeProfile[]>([])
+  const [assignments, setAssignments] = useState<EmployeeAssignment[]>([])
   const [tasks, setTasks] = useState<L21Task[]>([])
   const [taskComments, setTaskComments] = useState<L21TaskComment[]>([])
   const [conversations, setConversations] = useState<L21Conversation[]>([])
@@ -105,6 +119,7 @@ export function useL21Workspace() {
 
     if (!currentProfile) {
       setProfiles([])
+      setAssignments([])
       setTasks([])
       setTaskComments([])
       setConversations([])
@@ -122,8 +137,9 @@ export function useL21Workspace() {
     setLoading(true)
 
     loadPromiseRef.current = (async () => {
-      const [{ data: profilesData }, { data: tasksData }, { data: memberRows }] = await Promise.all([
+      const [{ data: profilesData }, { data: assignmentsData }, { data: tasksData }, { data: memberRows }] = await Promise.all([
         supabase.from('profiles').select('*').order('full_name'),
+        supabase.from('employee_assignments').select('*'),
         auth.isAdmin
           ? supabase.from('tasks').select('*').order('created_at', { ascending: false })
           : supabase.from('tasks').select('*').eq('assignee_id', currentProfile.id).order('created_at', { ascending: false }),
@@ -158,6 +174,7 @@ export function useL21Workspace() {
       }
 
       setProfiles((profilesData ?? []).map(mapProfile))
+      setAssignments((assignmentsData ?? []).map(mapAssignment))
       setTasks((tasksData ?? []).map(mapTask))
       setTaskComments((taskCommentsResult.data ?? []).map(mapTaskComment))
       setConversations(sortConversationsByUpdatedAt((conversationsResult.data ?? []).map(row => mapConversation(row, participantMap.get(row.id as string) ?? []))))
@@ -203,6 +220,7 @@ export function useL21Workspace() {
 
     const channel = supabase
       .channel(`l21-workspace-${auth.profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_assignments' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_comments' }, scheduleReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, scheduleReload)
@@ -506,10 +524,58 @@ export function useL21Workspace() {
     [profilesById],
   )
 
+  const assignmentsByProfile = useMemo(() => {
+    const map = new Map<string, EmployeeAssignment[]>()
+    for (const a of assignments) {
+      const list = map.get(a.profileId) ?? []
+      list.push(a)
+      map.set(a.profileId, list)
+    }
+    return map
+  }, [assignments])
+
+  const assignmentsByProperty = useMemo(() => {
+    const map = new Map<string, EmployeeAssignment[]>()
+    for (const a of assignments) {
+      const list = map.get(a.propertyId) ?? []
+      list.push(a)
+      map.set(a.propertyId, list)
+    }
+    return map
+  }, [assignments])
+
+  const getAssignmentsForProfile = useCallback(
+    (profileId: string) => assignmentsByProfile.get(profileId) ?? [],
+    [assignmentsByProfile],
+  )
+
+  const getAssignmentsForProperty = useCallback(
+    (propertyId: string) => assignmentsByProperty.get(propertyId) ?? [],
+    [assignmentsByProperty],
+  )
+
+  const addAssignment = useCallback(async (profileId: string, propertyId: string, roleType: EmployeeAssignment['roleType'], notes?: string) => {
+    const { error } = await supabase.from('employee_assignments').insert({
+      profile_id: profileId,
+      property_id: propertyId,
+      role_type: roleType,
+      notes: notes ?? '',
+    })
+    if (error) throw error
+    await loadWorkspace()
+  }, [loadWorkspace])
+
+  const removeAssignment = useCallback(async (assignmentId: string) => {
+    const { error } = await supabase.from('employee_assignments').delete().eq('id', assignmentId)
+    if (error) throw error
+    await loadWorkspace()
+  }, [loadWorkspace])
+
   return {
     ...auth,
     ready: !auth.loading && !loading,
     profiles,
+    assignments,
     tasks,
     taskComments,
     conversations,
@@ -529,6 +595,10 @@ export function useL21Workspace() {
     getTaskByConversation,
     getTaskComments,
     getProfile,
+    getAssignmentsForProfile,
+    getAssignmentsForProperty,
+    addAssignment,
+    removeAssignment,
     reload: loadWorkspace,
   }
 }

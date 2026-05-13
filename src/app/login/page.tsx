@@ -1,8 +1,7 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { LockKeyhole, Mail } from 'lucide-react'
 
@@ -12,6 +11,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Bereits eingeloggt → weiterleiten
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace('/')
+    })
+  }, [router])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -26,7 +32,7 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/mein-l21')
+    router.push('/')
     router.refresh()
   }
 
@@ -94,12 +100,8 @@ export default function LoginPage() {
             </form>
 
             <p className="mt-6 text-sm text-slate-500">
-              Noch kein Konto? Ein Admin muss es zuerst in der Mitarbeiterverwaltung anlegen. Bis dahin bleiben die bisherigen Bereiche der App unveraendert erreichbar.
+              Noch kein Konto? Ein Admin muss es zuerst in der Mitarbeiterverwaltung anlegen.
             </p>
-
-            <Link href="/" className="mt-8 inline-flex text-sm font-semibold text-slate-600 hover:text-slate-900">
-              Zurueck zum Dashboard
-            </Link>
           </div>
         </div>
       </div>
