@@ -5,6 +5,7 @@ import type { Customer, Location, Property } from '@/lib/types'
 export type TelegramAiIntent =
   | 'availability_check'
   | 'create_booking'
+  | 'extend_booking'
   | 'modify_current_draft'
   | 'answer_workflow_question'
   | 'status'
@@ -17,6 +18,7 @@ export type TelegramAiInterpretation = {
   confidence: number
   checkIn?: string
   checkOut?: string
+  newCheckOut?: string
   bedsNeeded?: number
   requestedRooms?: number
   locationName?: string
@@ -50,6 +52,7 @@ type RawAiInterpretation = {
   fields: {
     checkIn: string | null
     checkOut: string | null
+    newCheckOut: string | null
     bedsNeeded: number | null
     requestedRooms: number | null
     locationName: string | null
@@ -90,6 +93,7 @@ const interpretationInputSchema = {
       enum: [
         'availability_check',
         'create_booking',
+        'extend_booking',
         'modify_current_draft',
         'answer_workflow_question',
         'status',
@@ -104,6 +108,7 @@ const interpretationInputSchema = {
       properties: {
         checkIn: { type: ['string', 'null'], description: 'ISO date YYYY-MM-DD, or null if unclear.' },
         checkOut: { type: ['string', 'null'], description: 'ISO date YYYY-MM-DD, or null if unclear.' },
+        newCheckOut: { type: ['string', 'null'], description: 'ISO date YYYY-MM-DD. Only for extend_booking intent: the new desired checkout date.' },
         bedsNeeded: { type: ['number', 'null'] },
         requestedRooms: { type: ['number', 'null'] },
         locationName: { type: ['string', 'null'] },
@@ -130,6 +135,7 @@ const interpretationInputSchema = {
       required: [
         'checkIn',
         'checkOut',
+        'newCheckOut',
         'bedsNeeded',
         'requestedRooms',
         'locationName',
@@ -238,6 +244,7 @@ function normalizeRaw(raw: RawAiInterpretation): TelegramAiInterpretation {
     confidence: Math.max(0, Math.min(1, finiteNumber(raw.confidence) ?? 0)),
     checkIn: nonEmpty(fields.checkIn),
     checkOut: nonEmpty(fields.checkOut),
+    newCheckOut: nonEmpty(fields.newCheckOut),
     bedsNeeded: finiteNumber(fields.bedsNeeded),
     requestedRooms: finiteNumber(fields.requestedRooms),
     locationName: nonEmpty(fields.locationName),
@@ -299,6 +306,7 @@ export async function interpretTelegramMessageWithAi(args: {
         'Wenn relative Zeitraeume eindeutig sind, loese sie auf. Wenn sie nicht eindeutig sind, lasse checkIn/checkOut null und stelle eine kurze Rueckfrage.',
         'requestedNetPrice ist immer Netto-Preis pro Bett pro Nacht. Wenn ein Gesamtpreis gemeint sein koennte, markiere es als Ambiguitaet.',
         'Fuer kritische Aktionen: create_booking nur, wenn die Nachricht mehr als reine Verfuegbarkeit will. Sonst availability_check.',
+        'extend_booking: wenn der Nutzer eine bestehende Buchung verlaengern will ("Kunde X verlaengert bis ...", "Verlaengerung bis ...", "bleibt laenger bis ..."). Setze customerName auf den genannten Kunden und newCheckOut auf das neue Checkout-Datum. propertyHint kann optional gesetzt werden.',
         'Rufe immer das Tool interpret_telegram_message auf. Antworte nicht mit Freitext.',
       ].join('\n'),
       tools: [

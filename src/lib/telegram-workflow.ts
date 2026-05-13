@@ -6,6 +6,14 @@ import { parseBookingRequest } from '@/lib/booking-request-parser'
 import { createTelegramAvailabilityMessage } from '@/lib/availability-response'
 import { interpretTelegramMessageWithAi, type TelegramAiInterpretation } from '@/lib/telegram-ai-interpreter'
 import {
+  findActiveBookingsForCustomer,
+  calculateExtension,
+  executeExtension,
+  formatExtensionConfirmation,
+  formatExtensionSuccess,
+  type ExtensionCandidate,
+} from '@/lib/booking-extension-service'
+import {
   addCustomerServer,
   addBookingServer,
   findCustomersByQuery,
@@ -46,6 +54,8 @@ type TelegramConversationStage =
   | 'draft_created'
   | 'awaiting_booking_confirmation'
   | 'bookings_created'
+  | 'awaiting_extend_booking_selection'
+  | 'awaiting_extend_confirmation'
 
 type TelegramDraftRequest = {
   locationId: string
@@ -100,6 +110,14 @@ type TelegramRequestContext = {
   reference?: string
 }
 
+type TelegramExtensionState = {
+  customerQuery: string
+  propertyHint?: string
+  newCheckOut: string
+  candidateIndex?: number
+  candidateBookingIds?: string[]
+}
+
 type TelegramConversationState = {
   stage: TelegramConversationStage
   request?: TelegramDraftRequest
@@ -112,6 +130,7 @@ type TelegramConversationState = {
   bookingStatus?: BookingStatus
   draftInvoice?: DraftInvoiceState
   createdBookingIds?: string[]
+  extension?: TelegramExtensionState
 }
 
 type ConversationRow = {
@@ -459,6 +478,7 @@ function buildHelpMessage() {
     '',
     '<b>Befehle</b>',
     '/neu - neuen Vorgang starten',
+    '/verlaengern - Buchung verlängern',
     '/status - aktuellen Stand anzeigen',
     '/abbrechen - Vorgang verwerfen',
   ].join('\n')
@@ -1627,6 +1647,349 @@ async function handleBookingConfirmationStep(chatId: number | string, state: Tel
   }
 }
 
+// ─── Extension (Verlängerung) Handlers ─────────────────────────────────────
+
+function parseVerlaengernCommand(text: string): { customerQuery: string; newCheckOut?: string; propertyHint?: string } | null {
+  // /verlaengern Müller 20.05
+  // /verlaengern Müller GmbH 20.05.2026
+  // /verlaengern Müller Berlin-3 20.05
+  const trimmed = text.replace(/^\/verlaengern\s*/i, '').trim()
+  if (!trimmed) return null
+
+  // Try to extract a date at the end (dd.mm, dd.mm.yyyy, yyyy-mm-dd)
+  const dateMatch = trimmed.match(/(\d{4}-\d{2}-\d{2})$/) || trimmed.match(/(\d{1,2}\.\d{1,2}\.?\d{0,4})$/)
+  if (!dateMatch) {
+    return { customerQuery: trimmed }
+  }
+
+  const rawDate = dateMatch[1]
+  const rest = trimmed.slice(0, dateMatch.index).trim()
+
+  // Parse date
+  let newCheckOut: string | undefined
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    newCheckOut = rawDate
+  } else {
+    const parts = rawDate.replace(/\.$/, '').split('.')
+    const day = parts[0]?.padStart(2, '0')
+    const month = parts[1]?.padStart(2, '0')
+    const year = parts[2] && parts[2].length === 4
+      ? parts[2]
+      : parts[2] && parts[2].length === 2
+        ? `20${parts[2]}`
+        : new Date().getFullYear().toString()
+    newCheckOut = `${year}-${month}-${day}`
+
+    // If the parsed date is in the past, assume next year
+    if (newCheckOut < new Date().toISOString().slice(0, 10)) {
+      newCheckOut = `${parseInt(year) + 1}-${month}-${day}`
+    }
+  }
+
+  return { customerQuery: rest, newCheckOut }
+}
+
+async function handleExtensionStart(
+  chatId: number | string,
+  customerQuery: string,
+  newCheckOut?: string,
+  propertyHint?: string,
+): Promise<HandlerResult> {
+  if (!customerQuery) {
+    return {
+      handled: true,
+      reply: [
+        'Bitte nenne den Kundennamen und das neue Checkout-Datum.',
+        'Beispiel: <code>/verlaengern Müller 20.05</code>',
+        'Oder als Freitext: "Kunde Müller verlängert bis 20.05"',
+      ].join('\n'),
+    }
+  }
+
+  const candidates = await findActiveBookingsForCustomer(customerQuery, propertyHint)
+
+  if (candidates.length === 0) {
+    await resetConversation(chatId)
+    return {
+      handled: true,
+      reply: `Keine aktive Buchung für "${customerQuery}" gefunden. Prüfe den Kundennamen oder ob die Buchung den Status "bestätigt" hat.`,
+    }
+  }
+
+  if (!newCheckOut) {
+    // We have candidates but no date — ask for it
+    const bookingSummary = candidates.map((c, i) =>
+      `${i + 1}. ${c.customer.companyName} — ${c.property.shortCode || c.property.name} (${formatRange(c.booking.checkIn, c.booking.checkOut)}, ${c.booking.bedsBooked} Betten)`,
+    ).join('\n')
+
+    await saveConversation(chatId, {
+      ...defaultState(),
+      stage: 'awaiting_extend_booking_selection',
+      extension: {
+        customerQuery,
+        propertyHint,
+        newCheckOut: '',
+        candidateBookingIds: candidates.map(c => c.booking.id),
+      },
+    })
+
+    return {
+      handled: true,
+      reply: [
+        `Aktive Buchung${candidates.length > 1 ? 'en' : ''} gefunden:`,
+        bookingSummary,
+        '',
+        'Bis wann soll verlängert werden? Antworte mit einem Datum wie <code>20.05</code>.',
+        candidates.length > 1 ? 'Wähle ggf. auch die Nummer der Buchung, z. B. <code>1 20.05</code>.' : '',
+      ].filter(Boolean).join('\n'),
+    }
+  }
+
+  if (candidates.length === 1) {
+    // Single match — show confirmation directly
+    try {
+      const confirmMessage = formatExtensionConfirmation(candidates[0], newCheckOut)
+      await saveConversation(chatId, {
+        ...defaultState(),
+        stage: 'awaiting_extend_confirmation',
+        extension: {
+          customerQuery,
+          propertyHint,
+          newCheckOut,
+          candidateIndex: 0,
+          candidateBookingIds: [candidates[0].booking.id],
+        },
+      })
+
+      return { handled: true, reply: confirmMessage }
+    } catch (error) {
+      await resetConversation(chatId)
+      return {
+        handled: true,
+        reply: error instanceof Error ? error.message : 'Fehler bei der Verlängerungsberechnung.',
+      }
+    }
+  }
+
+  // Multiple matches — ask which one
+  const bookingSummary = candidates.map((c, i) =>
+    `${i + 1}. ${c.customer.companyName} — ${c.property.shortCode || c.property.name} (${formatRange(c.booking.checkIn, c.booking.checkOut)}, ${c.booking.bedsBooked} Betten)`,
+  ).join('\n')
+
+  await saveConversation(chatId, {
+    ...defaultState(),
+    stage: 'awaiting_extend_booking_selection',
+    extension: {
+      customerQuery,
+      propertyHint,
+      newCheckOut,
+      candidateBookingIds: candidates.map(c => c.booking.id),
+    },
+  })
+
+  return {
+    handled: true,
+    reply: [
+      `Mehrere aktive Buchungen für "${customerQuery}" gefunden:`,
+      bookingSummary,
+      '',
+      'Welche Buchung soll verlängert werden? Antworte mit der Nummer.',
+    ].join('\n'),
+  }
+}
+
+async function handleExtendBookingSelection(
+  chatId: number | string,
+  state: TelegramConversationState,
+  text: string,
+): Promise<HandlerResult> {
+  if (!state.extension) {
+    await resetConversation(chatId)
+    return { handled: true, reply: 'Kein aktiver Verlängerungsvorgang. Starte mit <code>/verlaengern</code> neu.' }
+  }
+
+  // Parse input: could be "2" (selection) or "20.05" (date) or "2 20.05" (both)
+  const parts = text.trim().split(/\s+/)
+  let selectionIndex: number | null = null
+  let dateInput: string | null = null
+
+  for (const part of parts) {
+    if (/^\d{1,2}\.\d{1,2}\.?\d{0,4}$/.test(part) || /^\d{4}-\d{2}-\d{2}$/.test(part)) {
+      dateInput = part
+    } else {
+      const num = parseInt(part, 10)
+      if (!isNaN(num)) selectionIndex = num - 1
+    }
+  }
+
+  const candidateIds = state.extension.candidateBookingIds ?? []
+
+  // If we need a date and got one
+  if (!state.extension.newCheckOut && dateInput) {
+    let parsedDate: string
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      parsedDate = dateInput
+    } else {
+      const dateParts = dateInput.replace(/\.$/, '').split('.')
+      const day = dateParts[0]?.padStart(2, '0')
+      const month = dateParts[1]?.padStart(2, '0')
+      const year = dateParts[2] && dateParts[2].length >= 4
+        ? dateParts[2]
+        : dateParts[2] && dateParts[2].length === 2
+          ? `20${dateParts[2]}`
+          : new Date().getFullYear().toString()
+      parsedDate = `${year}-${month}-${day}`
+      if (parsedDate < new Date().toISOString().slice(0, 10)) {
+        parsedDate = `${parseInt(year) + 1}-${month}-${day}`
+      }
+    }
+
+    state.extension.newCheckOut = parsedDate
+
+    // If only one candidate or we already have a selection
+    if (candidateIds.length === 1) {
+      selectionIndex = 0
+    }
+  }
+
+  // If we have a selection
+  if (selectionIndex !== null && selectionIndex >= 0 && selectionIndex < candidateIds.length) {
+    if (!state.extension.newCheckOut) {
+      state.extension.candidateIndex = selectionIndex
+      await saveConversation(chatId, state)
+      return {
+        handled: true,
+        reply: 'Bis wann soll verlängert werden? Antworte mit einem Datum wie <code>20.05</code>.',
+      }
+    }
+
+    // We have both selection and date — look up the candidate
+    const candidates = await findActiveBookingsForCustomer(state.extension.customerQuery, state.extension.propertyHint)
+    const candidate = candidates.find(c => c.booking.id === candidateIds[selectionIndex!])
+
+    if (!candidate) {
+      await resetConversation(chatId)
+      return { handled: true, reply: 'Die Buchung wurde nicht mehr gefunden. Bitte starte mit <code>/verlaengern</code> neu.' }
+    }
+
+    try {
+      const confirmMessage = formatExtensionConfirmation(candidate, state.extension.newCheckOut)
+      state.stage = 'awaiting_extend_confirmation'
+      state.extension.candidateIndex = selectionIndex
+      await saveConversation(chatId, state)
+      return { handled: true, reply: confirmMessage }
+    } catch (error) {
+      await resetConversation(chatId)
+      return {
+        handled: true,
+        reply: error instanceof Error ? error.message : 'Fehler bei der Verlängerungsberechnung.',
+      }
+    }
+  }
+
+  // If we have a date but still need selection (multiple candidates)
+  if (state.extension.newCheckOut && candidateIds.length > 1 && state.extension.candidateIndex === undefined) {
+    return {
+      handled: true,
+      reply: 'Welche Buchung soll verlängert werden? Antworte mit der Nummer.',
+    }
+  }
+
+  // If we already have candidateIndex set, use it
+  if (state.extension.candidateIndex !== undefined && state.extension.newCheckOut) {
+    const candidates = await findActiveBookingsForCustomer(state.extension.customerQuery, state.extension.propertyHint)
+    const candidate = candidates.find(c => c.booking.id === candidateIds[state.extension!.candidateIndex!])
+
+    if (!candidate) {
+      await resetConversation(chatId)
+      return { handled: true, reply: 'Die Buchung wurde nicht mehr gefunden. Bitte starte mit <code>/verlaengern</code> neu.' }
+    }
+
+    try {
+      const confirmMessage = formatExtensionConfirmation(candidate, state.extension.newCheckOut)
+      state.stage = 'awaiting_extend_confirmation'
+      await saveConversation(chatId, state)
+      return { handled: true, reply: confirmMessage }
+    } catch (error) {
+      await resetConversation(chatId)
+      return {
+        handled: true,
+        reply: error instanceof Error ? error.message : 'Fehler bei der Verlängerungsberechnung.',
+      }
+    }
+  }
+
+  return {
+    handled: true,
+    reply: [
+      'Ich konnte die Eingabe nicht zuordnen.',
+      candidateIds.length > 1 ? 'Antworte mit der Nummer der Buchung.' : '',
+      !state.extension.newCheckOut ? 'Antworte mit einem Datum wie <code>20.05</code>.' : '',
+    ].filter(Boolean).join('\n'),
+  }
+}
+
+async function handleExtendConfirmation(
+  chatId: number | string,
+  state: TelegramConversationState,
+  text: string,
+): Promise<HandlerResult> {
+  if (!state.extension) {
+    await resetConversation(chatId)
+    return { handled: true, reply: 'Kein aktiver Verlängerungsvorgang.' }
+  }
+
+  if (isNo(text)) {
+    await resetConversation(chatId)
+    return {
+      handled: true,
+      reply: 'Verlängerung abgebrochen.',
+    }
+  }
+
+  if (!isYes(text)) {
+    return {
+      handled: true,
+      reply: 'Bitte antworte mit <code>Ja</code> oder <code>Nein</code>.',
+    }
+  }
+
+  const candidateIds = state.extension.candidateBookingIds ?? []
+  const selectedIndex = state.extension.candidateIndex ?? 0
+  const candidates = await findActiveBookingsForCustomer(state.extension.customerQuery, state.extension.propertyHint)
+  const candidate = candidates.find(c => c.booking.id === candidateIds[selectedIndex])
+
+  if (!candidate) {
+    await resetConversation(chatId)
+    return { handled: true, reply: 'Die Buchung wurde nicht mehr gefunden. Bitte starte mit <code>/verlaengern</code> neu.' }
+  }
+
+  try {
+    const result = await executeExtension(candidate, state.extension.newCheckOut)
+    const successMessage = formatExtensionSuccess(candidate, result)
+
+    await resetConversation(chatId)
+
+    let document: HandlerResult['document']
+    if (result.pdfBuffer && result.pdfFileName) {
+      document = {
+        fileName: result.pdfFileName,
+        contentType: 'application/pdf',
+        data: result.pdfBuffer,
+        caption: `Verlängerungsrechnung: ${result.newVoucherNumber ?? result.newInvoiceId}`,
+      }
+    }
+
+    return { handled: true, reply: successMessage, document }
+  } catch (error) {
+    await resetConversation(chatId)
+    return {
+      handled: true,
+      reply: `Fehler bei der Verlängerung: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`,
+    }
+  }
+}
+
 export async function handleTelegramWorkflowMessage(chatId: number | string, text: string): Promise<HandlerResult> {
   const trimmed = text.trim()
   const normalized = normalize(trimmed)
@@ -1640,6 +2003,21 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
   if (normalized === '/abbrechen' || normalized === 'abbrechen') {
     await resetConversation(chatId)
     return { handled: true, reply: 'Der aktuelle Vorgang wurde verworfen.' }
+  }
+
+  if (normalized.startsWith('/verlaengern') || normalized === 'verlaengern') {
+    const parsed = parseVerlaengernCommand(trimmed)
+    if (!parsed || !parsed.customerQuery) {
+      return {
+        handled: true,
+        reply: [
+          'Bitte nenne den Kundennamen und das neue Checkout-Datum.',
+          'Beispiel: <code>/verlaengern Müller 20.05</code>',
+          'Oder als Freitext: "Kunde Müller verlängert bis 20.05"',
+        ].join('\n'),
+      }
+    }
+    return handleExtensionStart(chatId, parsed.customerQuery, parsed.newCheckOut, parsed.propertyHint)
   }
 
   if (normalized === '/neu' || normalized === 'neu' || normalized === 'neue buchung') {
@@ -1658,6 +2036,14 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
     }
   }
 
+  if (state.stage === 'awaiting_extend_booking_selection') {
+    return handleExtendBookingSelection(chatId, state, trimmed)
+  }
+
+  if (state.stage === 'awaiting_extend_confirmation') {
+    return handleExtendConfirmation(chatId, state, trimmed)
+  }
+
   if (state.stage === 'awaiting_availability_details') {
     return handleAvailabilityDetails(chatId, state, trimmed)
   }
@@ -1667,6 +2053,26 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
   }
 
   if (state.stage === 'idle') {
+    // Try AI interpretation for free-text extend_booking intent
+    try {
+      const [locations, properties, customers] = await Promise.all([
+        loadLocations(),
+        loadPropertiesServer(),
+        loadCustomersServer(),
+      ])
+      const aiResult = await interpretTelegramMessageWithAi({ text: trimmed, locations, properties, customers })
+      if (aiResult && aiResult.intent === 'extend_booking' && aiResult.confidence >= 0.6) {
+        const customerQuery = aiResult.customerName || aiResult.billingCompanyName || ''
+        const newCheckOut = aiResult.newCheckOut
+        const propertyHint = aiResult.propertyHint
+        if (customerQuery) {
+          return handleExtensionStart(chatId, customerQuery, newCheckOut, propertyHint)
+        }
+      }
+    } catch {
+      // Fall through to normal availability handling
+    }
+
     return handleAvailabilityStart(chatId, trimmed)
   }
 
