@@ -81,7 +81,7 @@ type RawAiInterpretation = {
   clarificationQuestion: string | null
 }
 
-const TELEGRAM_AI_MODEL = process.env.ANTHROPIC_TELEGRAM_MODEL || 'claude-sonnet-4-20250514'
+const TELEGRAM_AI_MODEL = process.env.ANTHROPIC_TELEGRAM_MODEL || 'claude-sonnet-4-6'
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
 
 const interpretationInputSchema = {
