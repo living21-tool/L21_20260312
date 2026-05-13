@@ -35,7 +35,9 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+      console.log('[Telegram] Incoming message:', JSON.stringify({ chatId, text }))
       const workflowResult = await handleTelegramWorkflowMessage(chatId, text)
+      console.log('[Telegram] Workflow result:', JSON.stringify({ handled: workflowResult.handled, replyLength: workflowResult.reply?.length, hasDocument: !!workflowResult.document }))
       if (workflowResult.handled) {
         await sendTelegramMessage(chatId, workflowResult.reply)
         if (workflowResult.document) {
@@ -64,7 +66,8 @@ export async function POST(req: NextRequest) {
       })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unbekannter Fehler'
-      console.error('Telegram webhook inner error:', error)
+      const stack = error instanceof Error ? error.stack : ''
+      console.error('Telegram webhook inner error:', message, stack)
       await sendTelegramMessage(
         chatId,
         `Ich konnte die Anfrage nicht sicher auswerten. ${message}`,
