@@ -900,7 +900,7 @@ async function buildConversationStateFromAvailability(args: {
     return { state: defaultState(), reply: availabilityReply }
   }
 
-  const preferredIds = new Set(richParsed.matchedProperties.map(property => property.id))
+  const preferredIds = new Set(richParsed?.matchedProperties.map(property => property.id) ?? [])
   const choiceCandidates = result.matchingProperties
     .filter(property => property.freeBeds >= parsedRequest.bedsNeeded)
     .filter(property => preferredIds.size === 0 || preferredIds.has(property.propertyId))
