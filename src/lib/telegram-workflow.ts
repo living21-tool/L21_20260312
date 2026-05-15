@@ -324,16 +324,20 @@ function mergeAiIntoParsedRequest(
 }
 
 function getCriticalClarification(ai: TelegramAiInterpretation | null, parsed: ReturnType<typeof parseBookingRequest>) {
-  if (!ai || ai.confidence < 0.5) return undefined
-  if (ai.intent !== 'availability_check' && ai.intent !== 'create_booking') return undefined
-
+  // Check which fields are missing — regardless of AI confidence
   const missing = []
-  if (!parsed.checkIn || !parsed.checkOut) missing.push('Zeitraum')
-  if (!parsed.bedsNeeded) missing.push('Bettenanzahl')
-  if (!parsed.matchedLocationId) missing.push('Standort oder Objekt')
+  if (!parsed.checkIn || !parsed.checkOut) missing.push('Zeitraum (z.B. "vom 15.05 bis 20.05")')
+  if (!parsed.bedsNeeded) missing.push('Bettenanzahl (z.B. "4 Betten")')
+  if (!parsed.matchedLocationId) missing.push('Standort oder Objekt (z.B. "in Berlin")')
 
   if (missing.length === 0) return undefined
-  return ai.clarificationQuestion || `Ich habe deine Anfrage verstanden, aber mir fehlt noch: ${missing.join(', ')}. Kannst du das kurz ergänzen?`
+
+  // Use AI clarification question if available, otherwise build our own
+  if (ai && ai.confidence >= 0.5 && ai.clarificationQuestion) {
+    return ai.clarificationQuestion
+  }
+
+  return `Mir fehlt noch: ${missing.join(', ')}. Kannst du das ergänzen?`
 }
 
 function buildPendingAvailabilityState(args: {
@@ -843,19 +847,30 @@ async function buildConversationStateFromAvailability(args: {
     }
   }
 
-  const parsedRequest =
-    richParsed.checkIn && richParsed.checkOut && richParsed.bedsNeeded && richParsed.matchedLocationId
-      ? {
-          locationId: richParsed.matchedLocationId,
-          locationName: richParsed.matchedLocationName,
-          checkIn: richParsed.checkIn,
-          checkOut: richParsed.checkOut,
-          bedsNeeded: richParsed.bedsNeeded,
-          strategy: 'fewest-properties' as const,
-          originalText: richParsed.originalText,
-          normalizedText: richParsed.originalText,
-        }
-      : parseAvailabilityMessage(text, locations)
+  if (!richParsed.checkIn || !richParsed.checkOut || !richParsed.bedsNeeded || !richParsed.matchedLocationId) {
+    // Should not reach here (getCriticalClarification catches missing fields above),
+    // but as safety net: ask for missing info instead of crashing
+    const missing = []
+    if (!richParsed.checkIn || !richParsed.checkOut) missing.push('Zeitraum')
+    if (!richParsed.bedsNeeded) missing.push('Bettenanzahl')
+    if (!richParsed.matchedLocationId) missing.push('Standort')
+    const fallbackQuestion = `Mir fehlt noch: ${missing.join(', ')}. Kannst du das ergänzen?`
+    return {
+      state: buildPendingAvailabilityState({ text, parsed: richParsed, ai: aiInterpretation, clarificationQuestion: fallbackQuestion }),
+      reply: fallbackQuestion,
+    }
+  }
+
+  const parsedRequest = {
+    locationId: richParsed.matchedLocationId,
+    locationName: richParsed.matchedLocationName,
+    checkIn: richParsed.checkIn,
+    checkOut: richParsed.checkOut,
+    bedsNeeded: richParsed.bedsNeeded,
+    strategy: 'fewest-properties' as const,
+    originalText: richParsed.originalText,
+    normalizedText: richParsed.originalText,
+  }
 
   const result = await checkAvailability(parsedRequest)
   const availabilityReply = createTelegramAvailabilityMessage(result, parsedRequest)
