@@ -447,9 +447,23 @@ export function useBookings() {
   const load = useCallback(async () => {
     try {
       const nextBookings = await loadCached(bookingsCache, async () => {
-        const { data, error } = await supabase.from('bookings').select('*').order('check_in', { ascending: false })
-        if (error) throw error
-        return (data ?? []).map(mapBooking)
+        // Supabase returns max 1000 rows — paginate to load all bookings
+        const all: Record<string, unknown>[] = []
+        const PAGE = 1000
+        let from = 0
+        for (;;) {
+          const { data, error } = await supabase
+            .from('bookings')
+            .select('*')
+            .order('check_in', { ascending: false })
+            .range(from, from + PAGE - 1)
+          if (error) throw error
+          if (!data || data.length === 0) break
+          all.push(...data)
+          if (data.length < PAGE) break
+          from += PAGE
+        }
+        return all.map(mapBooking)
       })
       setBookings(nextBookings)
     } finally {

@@ -137,8 +137,13 @@ async function loadProperties(locationId: string): Promise<Property[]> {
   return (data ?? []).map(mapProperty)
 }
 
-async function loadBookings(): Promise<Booking[]> {
-  const { data, error } = await supabaseServer.from('bookings').select('*')
+async function loadBookingsInRange(checkIn: string, checkOut: string): Promise<Booking[]> {
+  // Only load bookings that overlap with the requested date range
+  const { data, error } = await supabaseServer
+    .from('bookings')
+    .select('*')
+    .lt('check_in', checkOut)
+    .gt('check_out', checkIn)
   if (error) throw new Error(`Buchungen konnten nicht geladen werden: ${error.message}`)
   return (data ?? []).map(mapBooking)
 }
@@ -168,16 +173,9 @@ export async function checkAvailability(input: AvailabilityLookupInput): Promise
   const location = findLocation(locations, input)
   const [properties, bookings] = await Promise.all([
     loadProperties(location.id),
-    loadBookings(),
+    loadBookingsInRange(input.checkIn, input.checkOut),
   ])
 
-  // DEBUG: Log what the DB returns for this location
-  console.log('[availability-debug]', JSON.stringify({
-    input: { locationName: input.locationName, city: input.city, bedsNeeded: input.bedsNeeded, checkIn: input.checkIn, checkOut: input.checkOut },
-    locationFound: { id: location.id, name: location.name, city: location.city },
-    propertiesLoaded: properties.map(p => ({ id: p.id, name: p.name, shortCode: p.shortCode, beds: p.beds, active: p.active, locationId: p.locationId })),
-    totalBookings: bookings.length,
-  }))
 
   const nights = differenceInDays(new Date(input.checkOut), new Date(input.checkIn))
   const availabilities = calcAvailableBedsPerProperty(
