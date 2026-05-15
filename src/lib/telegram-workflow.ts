@@ -829,7 +829,8 @@ async function buildConversationStateFromAvailability(args: {
   ])
 
   let aiInterpretation: TelegramAiInterpretation | null = null
-  let richParsed: ReturnType<typeof parseBookingRequest> | null = null
+  // Default empty parsed result — overwritten below when not using knownRequest
+  let richParsed: ReturnType<typeof parseBookingRequest> = parseBookingRequest('', { properties, locations, customers })
 
   if (!knownRequest) {
     if (!forcedPropertyId) {
