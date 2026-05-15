@@ -1,6 +1,8 @@
 'use client'
+import { useEffect, useRef } from 'react'
 import { useBookings, useProperties, useLocations, useCustomers } from '@/lib/store'
 import { formatCurrency, formatDate, statusConfig } from '@/lib/utils'
+import { useAuthProfile } from '@/lib/auth-client'
 import { parseISO, isToday, format } from 'date-fns'
 import { de } from 'date-fns/locale'
 import {
@@ -39,7 +41,23 @@ export default function DashboardPage() {
   const { properties: allProperties, loading: loadingP } = useProperties()
   const { locations: allLocations } = useLocations()
   const { customers: allCustomers } = useCustomers()
+  const { session, isAdmin } = useAuthProfile()
   const loading = loadingB || loadingP
+
+  // Einmal pro Session: Reinigungs-Tasks generieren (nur Admin)
+  const cleaningTriggered = useRef(false)
+  useEffect(() => {
+    if (!isAdmin || !session?.access_token || cleaningTriggered.current) return
+    cleaningTriggered.current = true
+    fetch('/api/cleaning-tasks/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: '{}',
+    }).catch(() => {})
+  }, [isAdmin, session])
 
   const today = new Date()
   const thisMonth = today.getMonth()

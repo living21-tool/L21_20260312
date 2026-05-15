@@ -54,6 +54,7 @@ function mapTask(row: Record<string, unknown>): L21Task {
     conversationId: (row.conversation_id as string | null) ?? undefined,
     archivedAt: (row.archived_at as string | null) ?? undefined,
     archivedBy: (row.archived_by as string | null) ?? undefined,
+    bookingId: (row.booking_id as string | null) ?? undefined,
     createdAt: row.created_at as string,
   }
 }
@@ -562,8 +563,21 @@ export function useL21Workspace() {
       notes: notes ?? '',
     })
     if (error) throw error
+
+    // Bei Reinigung-Zuweisung: automatisch Reinigungs-Tasks generieren
+    if (roleType === 'reinigung' && auth.session?.access_token) {
+      fetch('/api/cleaning-tasks/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.session.access_token}`,
+        },
+        body: JSON.stringify({ propertyId }),
+      }).catch(() => {}) // fire-and-forget; realtime aktualisiert UI
+    }
+
     await loadWorkspace()
-  }, [loadWorkspace])
+  }, [loadWorkspace, auth.session])
 
   const removeAssignment = useCallback(async (assignmentId: string) => {
     const { error } = await supabase.from('employee_assignments').delete().eq('id', assignmentId)

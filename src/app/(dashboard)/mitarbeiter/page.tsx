@@ -671,7 +671,10 @@ export default function MitarbeiterPage() {
                             <span className={cn('h-2 w-2 shrink-0 rounded-full', st.dot)} />
                             {/* Title + Meta */}
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-slate-900">{task.title}</p>
+                              <p className="truncate text-sm font-medium text-slate-900">
+                                {task.title}
+                                {task.bookingId && <span className="ml-1.5 inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600">Auto</span>}
+                              </p>
                               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
                                 {task.dueDate && <span className="flex items-center gap-1"><Calendar size={10} />{formatDate(task.dueDate)}</span>}
                                 {propName && <span className="flex items-center gap-1"><Home size={10} />{propName}</span>}

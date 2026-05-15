@@ -59,7 +59,8 @@ export function calcAvailableBedsPerProperty(
 
   const propIds = new Set(activeProps.map(p => p.id))
   const relevant = bookings.filter(b => {
-    if (b.status !== 'bestaetigt' && b.status !== 'abgeschlossen') return false
+    if (b.status === 'storniert') return false
+    if (b.source === 'lexoffice_sonstige') return false
     if (!propIds.has(b.propertyId)) return false
     const ci = parseISO(b.checkIn)
     const co = parseISO(b.checkOut)

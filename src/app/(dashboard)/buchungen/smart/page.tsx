@@ -970,9 +970,9 @@ export default function SmartBookingPage() {
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
               <div>
-                <p className="text-sm font-semibold text-slate-900">Kundenanfrage einfÃ¼gen</p>
+                <p className="text-sm font-semibold text-slate-900">Kundenanfrage einfügen</p>
                 <p className="text-sm text-slate-500">
-                  Freitext, Mail oder Chatnachricht einfÃ¼gen. Die relevanten Felder werden automatisch erkannt und soweit mÃ¶glich vorbelegt.
+                  Freitext, Mail oder Chatnachricht einfügen. Die relevanten Felder werden automatisch erkannt und soweit möglich vorbelegt.
                 </p>
               </div>
 
@@ -980,7 +980,7 @@ export default function SmartBookingPage() {
                 value={requestText}
                 onChange={event => setRequestText(event.target.value)}
                 rows={10}
-                placeholder="Anfrage hier einfÃ¼gen..."
+                placeholder="Anfrage hier einfügen..."
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
               />
 
@@ -995,7 +995,7 @@ export default function SmartBookingPage() {
                 </button>
                 {parsedRequest && (
                   <span className="text-sm text-slate-500">
-                    Zeitraum, Personen, Standort, Preis und Rechnungsinfos wurden in die Eingabemaske Ã¼bernommen.
+                    Zeitraum, Personen, Standort, Preis und Rechnungsinfos wurden in die Eingabemaske übernommen.
                   </span>
                 )}
               </div>
@@ -1039,7 +1039,7 @@ export default function SmartBookingPage() {
                       </div>
                     ) : (
                       <p className="text-sm text-amber-800">
-                        Keine offenen Punkte erkannt. Du kannst direkt die VerfÃ¼gbarkeit prÃ¼fen.
+                        Keine offenen Punkte erkannt. Du kannst direkt die Verfügbarkeit prüfen.
                       </p>
                     )}
                   </div>
@@ -1241,9 +1241,9 @@ export default function SmartBookingPage() {
                     <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div>
-                          <p className="text-sm font-semibold text-blue-900">Wohnung direkt auswÃ¤hlen</p>
+                          <p className="text-sm font-semibold text-blue-900">Wohnung direkt auswählen</p>
                           <p className="text-sm text-blue-700">
-                            Mehrere Einheiten kÃ¶nnen die komplette Position aufnehmen. Du kannst hier gezielt mit 1, 2, 3 ... die gewÃ¼nschte Wohnung festlegen.
+                            Mehrere Einheiten können die komplette Position aufnehmen. Du kannst hier gezielt mit 1, 2, 3 ... die gewünschte Wohnung festlegen.
                           </p>
                         </div>
                         <button
@@ -1369,6 +1369,7 @@ export default function SmartBookingPage() {
                                     min={0}
                                     max={allocation.minFreeBeds}
                                     value={allocation.bedsAllocated}
+                                    onFocus={event => event.target.select()}
                                     onChange={event =>
                                       updateManualValue(
                                         item.id,
@@ -1395,6 +1396,7 @@ export default function SmartBookingPage() {
                                       min={0}
                                       step={0.5}
                                       value={allocation.pricePerBedNight || ''}
+                                      onFocus={event => event.target.select()}
                                       onChange={event =>
                                         updateManualValue(
                                           item.id,
@@ -1420,6 +1422,7 @@ export default function SmartBookingPage() {
                                       min={0}
                                       step={5}
                                       value={allocation.cleaningFee || ''}
+                                      onFocus={event => event.target.select()}
                                       onChange={event =>
                                         updateManualValue(
                                           item.id,
@@ -1686,6 +1689,7 @@ export default function SmartBookingPage() {
                         type="number"
                         min={0}
                         value={invoiceForm.paymentTermDays}
+                        onFocus={event => event.target.select()}
                         onChange={event => updateInvoiceField('paymentTermDays', Math.max(0, Number(event.target.value) || 0))}
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -1699,6 +1703,7 @@ export default function SmartBookingPage() {
                           max={100}
                           step={0.5}
                           value={invoiceForm.totalDiscountPercentage || ''}
+                          onFocus={event => event.target.select()}
                           onChange={event => updateInvoiceField('totalDiscountPercentage', Math.max(0, Math.min(100, Number(event.target.value) || 0)))}
                           className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1813,6 +1818,7 @@ export default function SmartBookingPage() {
                                   min={0}
                                   step={0.25}
                                   value={line.quantity}
+                                  onFocus={event => event.target.select()}
                                   onChange={event => updateInvoiceLine(line.id, current => ({ ...current, quantity: Math.max(0, Number(event.target.value) || 0) }))}
                                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -1832,6 +1838,7 @@ export default function SmartBookingPage() {
                                   min={0}
                                   step={0.01}
                                   value={line.unitPriceNet}
+                                  onFocus={event => event.target.select()}
                                   onChange={event => updateInvoiceLine(line.id, current => ({ ...current, unitPriceNet: Math.max(0, Number(event.target.value) || 0) }))}
                                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -1844,6 +1851,7 @@ export default function SmartBookingPage() {
                                   max={100}
                                   step={0.5}
                                   value={line.discountPercentage}
+                                  onFocus={event => event.target.select()}
                                   onChange={event => updateInvoiceLine(line.id, current => ({ ...current, discountPercentage: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }))}
                                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />

@@ -43,6 +43,7 @@ export interface L21Task {
   conversationId?: string
   archivedAt?: string
   archivedBy?: string
+  bookingId?: string
   createdAt: string
 }
 

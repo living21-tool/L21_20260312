@@ -3,12 +3,21 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, CalendarDays, BookOpen, Building2,
-  Users, BarChart3, Settings, Import, ChevronRight, Zap, MessageSquareMore
+  Users, BarChart3, Settings, Import, ChevronRight, Zap, MessageSquareMore, Sparkles
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthProfile } from '@/lib/auth-client'
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  verwaltung: 'Verwaltung',
+  hausmeister: 'Hausmeister',
+  reinigung: 'Reinigung',
+}
 
 const navItems = [
   { href: '/',             label: 'Dashboard',    icon: LayoutDashboard },
+  { href: '/l21-ai',       label: 'L21 AI',       icon: Sparkles },
   { href: '/mein-l21',     label: 'Mein L21',     icon: MessageSquareMore },
   { href: '/mitarbeiter',  label: 'Mitarbeiter',  icon: Users },
   { href: '/kalender',     label: 'Belegungskalender', icon: CalendarDays },
@@ -23,6 +32,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { profile } = useAuthProfile()
 
   return (
     <aside className="fixed top-0 left-0 h-screen w-64 bg-slate-900 text-white flex flex-col z-40">
@@ -72,12 +82,15 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="px-4 py-4 border-t border-slate-700">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center text-xs font-bold">
-            AD
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+            style={{ backgroundColor: profile?.avatarColor ?? '#475569' }}
+          >
+            {profile?.initials ?? '??'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium truncate">Admin</p>
-            <p className="text-xs text-slate-400 truncate">admin@l21.de</p>
+            <p className="text-xs font-medium truncate">{profile?.fullName ?? 'Laden...'}</p>
+            <p className="text-xs text-slate-400 truncate">{ROLE_LABELS[profile?.role ?? ''] ?? profile?.role ?? ''}</p>
           </div>
         </div>
       </div>
