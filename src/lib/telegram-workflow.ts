@@ -812,8 +812,16 @@ async function resetConversation(chatId: number | string) {
 async function buildConversationStateFromAvailability(args: {
   text: string
   forcedPropertyId?: string
+  /** Pre-parsed request fields — skip parsing when already known (e.g. after property selection) */
+  knownRequest?: {
+    locationId: string
+    locationName?: string
+    checkIn: string
+    checkOut: string
+    bedsNeeded: number
+  }
 }) {
-  const { text, forcedPropertyId } = args
+  const { text, forcedPropertyId, knownRequest } = args
   const [locations, properties, customers] = await Promise.all([
     loadLocations(),
     loadPropertiesServer(),
@@ -821,56 +829,69 @@ async function buildConversationStateFromAvailability(args: {
   ])
 
   let aiInterpretation: TelegramAiInterpretation | null = null
-  if (!forcedPropertyId) {
-    try {
-      aiInterpretation = await interpretTelegramMessageWithAi({ text, locations, properties, customers })
-    } catch (error) {
-      console.warn('Telegram AI interpretation failed, falling back to classic parser:', error)
+  let richParsed: ReturnType<typeof parseBookingRequest> | null = null
+
+  if (!knownRequest) {
+    if (!forcedPropertyId) {
+      try {
+        aiInterpretation = await interpretTelegramMessageWithAi({ text, locations, properties, customers })
+      } catch (error) {
+        console.warn('Telegram AI interpretation failed, falling back to classic parser:', error)
+      }
+    }
+
+    const classicParsed = parseBookingRequest(text, { properties, locations, customers })
+    richParsed = mergeAiIntoParsedRequest(classicParsed, aiInterpretation, { properties, locations, customers })
+    const clarificationQuestion = getCriticalClarification(aiInterpretation, richParsed)
+    if (clarificationQuestion) {
+      return {
+        state: buildPendingAvailabilityState({
+          text,
+          parsed: richParsed,
+          ai: aiInterpretation,
+          clarificationQuestion,
+        }),
+        reply: [
+          clarificationQuestion,
+          aiInterpretation?.ambiguities.length ? ['', `Unsicher bin ich bei: ${aiInterpretation.ambiguities.join('; ')}`].join('\n') : '',
+        ].filter(Boolean).join('\n'),
+      }
+    }
+
+    if (!richParsed.checkIn || !richParsed.checkOut || !richParsed.bedsNeeded || !richParsed.matchedLocationId) {
+      const missing = []
+      if (!richParsed.checkIn || !richParsed.checkOut) missing.push('Zeitraum')
+      if (!richParsed.bedsNeeded) missing.push('Bettenanzahl')
+      if (!richParsed.matchedLocationId) missing.push('Standort')
+      const fallbackQuestion = `Mir fehlt noch: ${missing.join(', ')}. Kannst du das ergänzen?`
+      return {
+        state: buildPendingAvailabilityState({ text, parsed: richParsed, ai: aiInterpretation, clarificationQuestion: fallbackQuestion }),
+        reply: fallbackQuestion,
+      }
     }
   }
 
-  const classicParsed = parseBookingRequest(text, { properties, locations, customers })
-  const richParsed = mergeAiIntoParsedRequest(classicParsed, aiInterpretation, { properties, locations, customers })
-  const clarificationQuestion = getCriticalClarification(aiInterpretation, richParsed)
-  if (clarificationQuestion) {
-    return {
-      state: buildPendingAvailabilityState({
-        text,
-        parsed: richParsed,
-        ai: aiInterpretation,
-        clarificationQuestion,
-      }),
-      reply: [
-        clarificationQuestion,
-        aiInterpretation?.ambiguities.length ? ['', `Unsicher bin ich bei: ${aiInterpretation.ambiguities.join('; ')}`].join('\n') : '',
-      ].filter(Boolean).join('\n'),
-    }
-  }
-
-  if (!richParsed.checkIn || !richParsed.checkOut || !richParsed.bedsNeeded || !richParsed.matchedLocationId) {
-    // Should not reach here (getCriticalClarification catches missing fields above),
-    // but as safety net: ask for missing info instead of crashing
-    const missing = []
-    if (!richParsed.checkIn || !richParsed.checkOut) missing.push('Zeitraum')
-    if (!richParsed.bedsNeeded) missing.push('Bettenanzahl')
-    if (!richParsed.matchedLocationId) missing.push('Standort')
-    const fallbackQuestion = `Mir fehlt noch: ${missing.join(', ')}. Kannst du das ergänzen?`
-    return {
-      state: buildPendingAvailabilityState({ text, parsed: richParsed, ai: aiInterpretation, clarificationQuestion: fallbackQuestion }),
-      reply: fallbackQuestion,
-    }
-  }
-
-  const parsedRequest = {
-    locationId: richParsed.matchedLocationId,
-    locationName: richParsed.matchedLocationName,
-    checkIn: richParsed.checkIn,
-    checkOut: richParsed.checkOut,
-    bedsNeeded: richParsed.bedsNeeded,
-    strategy: 'fewest-properties' as const,
-    originalText: richParsed.originalText,
-    normalizedText: richParsed.originalText,
-  }
+  const parsedRequest = knownRequest
+    ? {
+        locationId: knownRequest.locationId,
+        locationName: knownRequest.locationName,
+        checkIn: knownRequest.checkIn,
+        checkOut: knownRequest.checkOut,
+        bedsNeeded: knownRequest.bedsNeeded,
+        strategy: 'fewest-properties' as const,
+        originalText: text,
+        normalizedText: text,
+      }
+    : {
+        locationId: richParsed!.matchedLocationId!,
+        locationName: richParsed!.matchedLocationName,
+        checkIn: richParsed!.checkIn!,
+        checkOut: richParsed!.checkOut!,
+        bedsNeeded: richParsed!.bedsNeeded!,
+        strategy: 'fewest-properties' as const,
+        originalText: richParsed!.originalText,
+        normalizedText: richParsed!.originalText,
+      }
 
   const result = await checkAvailability(parsedRequest)
   const availabilityReply = createTelegramAvailabilityMessage(result, parsedRequest)
@@ -1380,6 +1401,13 @@ async function handlePropertySelection(chatId: number | string, state: TelegramC
   const rebuilt = await buildConversationStateFromAvailability({
     text: state.request.originalText,
     forcedPropertyId: choice.propertyId,
+    knownRequest: {
+      locationId: state.request.locationId,
+      locationName: state.request.locationName,
+      checkIn: state.request.checkIn,
+      checkOut: state.request.checkOut,
+      bedsNeeded: state.request.bedsNeeded,
+    },
   })
 
   const nextState: TelegramConversationState = {
