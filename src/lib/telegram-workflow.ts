@@ -1489,12 +1489,6 @@ async function handlePriceStep(chatId: number | string, state: TelegramConversat
   }
 
   return moveToNextRequiredStep(chatId, state)
-  state.stage = 'awaiting_discount'
-  await saveConversation(chatId, state)
-  return {
-    handled: true,
-    reply: 'Soll ein Rabatt berücksichtigt werden? Antworte mit einer Zahl wie <code>5</code> oder mit <code>nein</code>.',
-  }
 }
 
 async function handleDiscountStep(chatId: number | string, state: TelegramConversationState, text: string): Promise<HandlerResult> {
@@ -2087,36 +2081,11 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
     return handleExtendConfirmation(chatId, state, trimmed)
   }
 
+  // ── Active workflow stages: handle FIRST, before checking for new requests ──
+  // This prevents looksLikeAvailabilityRequest from hijacking mid-conversation
+
   if (state.stage === 'awaiting_availability_details') {
     return handleAvailabilityDetails(chatId, state, trimmed)
-  }
-
-  if (looksLikeAvailabilityRequest(trimmed)) {
-    return handleAvailabilityStart(chatId, trimmed)
-  }
-
-  if (state.stage === 'idle') {
-    // Try AI interpretation for free-text extend_booking intent
-    try {
-      const [locations, properties, customers] = await Promise.all([
-        loadLocations(),
-        loadPropertiesServer(),
-        loadCustomersServer(),
-      ])
-      const aiResult = await interpretTelegramMessageWithAi({ text: trimmed, locations, properties, customers })
-      if (aiResult && aiResult.intent === 'extend_booking' && aiResult.confidence >= 0.6) {
-        const customerQuery = aiResult.customerName || aiResult.billingCompanyName || ''
-        const newCheckOut = aiResult.newCheckOut
-        const propertyHint = aiResult.propertyHint
-        if (customerQuery) {
-          return handleExtensionStart(chatId, customerQuery, newCheckOut, propertyHint)
-        }
-      }
-    } catch {
-      // Fall through to normal availability handling
-    }
-
-    return handleAvailabilityStart(chatId, trimmed)
   }
 
   if (state.stage === 'awaiting_property_selection') {
@@ -2174,6 +2143,36 @@ export async function handleTelegramWorkflowMessage(chatId: number | string, tex
       handled: true,
       reply: 'Dieser Vorgang ist abgeschlossen. Starte mit <code>/neu</code> einen neuen Ablauf.',
     }
+  }
+
+  // ── No active workflow — check for new requests ──
+
+  if (looksLikeAvailabilityRequest(trimmed)) {
+    return handleAvailabilityStart(chatId, trimmed)
+  }
+
+  if (state.stage === 'idle') {
+    // Try AI interpretation for free-text extend_booking intent
+    try {
+      const [locations, properties, customers] = await Promise.all([
+        loadLocations(),
+        loadPropertiesServer(),
+        loadCustomersServer(),
+      ])
+      const aiResult = await interpretTelegramMessageWithAi({ text: trimmed, locations, properties, customers })
+      if (aiResult && aiResult.intent === 'extend_booking' && aiResult.confidence >= 0.6) {
+        const customerQuery = aiResult.customerName || aiResult.billingCompanyName || ''
+        const newCheckOut = aiResult.newCheckOut
+        const propertyHint = aiResult.propertyHint
+        if (customerQuery) {
+          return handleExtensionStart(chatId, customerQuery, newCheckOut, propertyHint)
+        }
+      }
+    } catch {
+      // Fall through to normal availability handling
+    }
+
+    return handleAvailabilityStart(chatId, trimmed)
   }
 
   return { handled: false, reply: '' }
